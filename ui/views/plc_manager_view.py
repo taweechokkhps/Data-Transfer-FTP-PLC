@@ -4,6 +4,7 @@ import threading
 from core.ftp_service import test_connection
 from core.path_utils import sanitize_remote_path
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
+from ui.components.date_picker import DatePickerPopup, validate_date_range
 
 class PLCManagerView(ctk.CTkFrame):
     def __init__(self, master, config_manager, on_plc_list_updated=None, **kwargs):
@@ -239,15 +240,31 @@ class PLCManagerView(ctk.CTkFrame):
         rb_range = ctk.CTkRadioButton(radio_row, text="Date Range (เลือกช่วงวันที่)", variable=filter_mode_var, value="range", command=toggle_date_mode)
         rb_range.pack(side="left")
         
-        ctk.CTkLabel(date_inputs_row, text="Start:").pack(side="left", padx=(0, 5))
-        start_date_ent = ctk.CTkEntry(date_inputs_row, width=105, placeholder_text="DD/MM/YYYY")
+        def pick_start():
+            def on_sel(d_str):
+                start_date_ent.delete(0, "end")
+                start_date_ent.insert(0, d_str)
+            DatePickerPopup(dialog, initial_date=start_date_ent.get(), on_select=on_sel)
+
+        def pick_end():
+            def on_sel(d_str):
+                end_date_ent.delete(0, "end")
+                end_date_ent.insert(0, d_str)
+            DatePickerPopup(dialog, initial_date=end_date_ent.get(), on_select=on_sel)
+
+        ctk.CTkLabel(date_inputs_row, text="Start:").pack(side="left", padx=(0, 4))
+        start_date_ent = ctk.CTkEntry(date_inputs_row, width=95, placeholder_text="DD/MM/YYYY")
         start_date_ent.insert(0, plc_df.get("start_date", ""))
-        start_date_ent.pack(side="left", padx=(0, 15))
+        start_date_ent.pack(side="left", padx=(0, 2))
+        btn_start_cal = ctk.CTkButton(date_inputs_row, text="📅", width=28, height=28, command=pick_start)
+        btn_start_cal.pack(side="left", padx=(0, 12))
         
-        ctk.CTkLabel(date_inputs_row, text="End:").pack(side="left", padx=(0, 5))
-        end_date_ent = ctk.CTkEntry(date_inputs_row, width=105, placeholder_text="DD/MM/YYYY")
+        ctk.CTkLabel(date_inputs_row, text="End:").pack(side="left", padx=(0, 4))
+        end_date_ent = ctk.CTkEntry(date_inputs_row, width=95, placeholder_text="DD/MM/YYYY")
         end_date_ent.insert(0, plc_df.get("end_date", ""))
-        end_date_ent.pack(side="left", padx=(0, 10))
+        end_date_ent.pack(side="left", padx=(0, 2))
+        btn_end_cal = ctk.CTkButton(date_inputs_row, text="📅", width=28, height=28, command=pick_end)
+        btn_end_cal.pack(side="left", padx=(0, 8))
         
         ctk.CTkLabel(date_inputs_row, text="(e.g. 01/05/2025)", font=ctk.CTkFont(size=11), text_color="gray").pack(side="left")
 
@@ -278,14 +295,9 @@ class PLCManagerView(ctk.CTkFrame):
             s_date = start_date_ent.get().strip()
             e_date = end_date_ent.get().strip()
             if df_mode == "range":
-                import datetime
-                try:
-                    d1 = datetime.datetime.strptime(s_date, "%d/%m/%Y")
-                    d2 = datetime.datetime.strptime(e_date, "%d/%m/%Y")
-                    if d1 > d2:
-                        s_date, e_date = e_date, s_date
-                except Exception:
-                    test_status_lbl.configure(text="Invalid date format! Please use DD/MM/YYYY.", text_color="#FF5252")
+                ok, err, _, _ = validate_date_range(s_date, e_date)
+                if not ok:
+                    test_status_lbl.configure(text=err, text_color="#FF5252")
                     return
 
             new_data = {
