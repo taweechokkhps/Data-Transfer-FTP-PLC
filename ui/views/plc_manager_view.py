@@ -31,12 +31,12 @@ class PLCManagerView(ctk.CTkFrame):
             
         header_frame = ctk.CTkFrame(self.plc_list_frame, fg_color="transparent")
         header_frame.pack(fill="x", padx=5, pady=(5, 0))
-        header_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
-        header_frame.grid_columnconfigure(4, weight=0, minsize=140)
+        header_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+        header_frame.grid_columnconfigure(5, weight=0, minsize=140)
         
-        headers = ["Line Name", "Host:Port", "Username", "Configured Machines", "Actions"]
+        headers = ["Line Name", "Host:Port", "Username", "Configured Machines", "Date Filter", "Actions"]
         for col, text in enumerate(headers):
-            anchor = "e" if col == 4 else "w"
+            anchor = "e" if col == 5 else "w"
             ctk.CTkLabel(header_frame, text=text, font=ctk.CTkFont(weight="bold")).grid(row=0, column=col, padx=10, pady=5, sticky=anchor)
             
         sep = ctk.CTkFrame(self.plc_list_frame, height=2, fg_color=("gray70", "gray30"))
@@ -46,8 +46,8 @@ class PLCManagerView(ctk.CTkFrame):
         for i, plc in enumerate(plcs):
             frame = ctk.CTkFrame(self.plc_list_frame)
             frame.pack(fill="x", padx=5, pady=2)
-            frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
-            frame.grid_columnconfigure(4, weight=0, minsize=140)
+            frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+            frame.grid_columnconfigure(5, weight=0, minsize=140)
             
             ctk.CTkLabel(frame, text=plc.get('name', ''), font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, padx=10, pady=10, sticky="w")
             ctk.CTkLabel(frame, text=f"{plc.get('host', '')}:{plc.get('port', 21)}").grid(row=0, column=1, padx=10, pady=10, sticky="w")
@@ -60,12 +60,20 @@ class PLCManagerView(ctk.CTkFrame):
             else:
                 m_summary = "1 MC: (Default)"
                 
-            if len(m_summary) > 35:
-                m_summary = m_summary[:32] + "..."
+            if len(m_summary) > 28:
+                m_summary = m_summary[:25] + "..."
             ctk.CTkLabel(frame, text=m_summary).grid(row=0, column=3, padx=10, pady=10, sticky="w")
             
+            # Date filter summary
+            df = plc.get("date_filter", {})
+            if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
+                df_label = f"📅 {df['start_date']} - {df['end_date']}"
+            else:
+                df_label = "📅 All Files"
+            ctk.CTkLabel(frame, text=df_label, text_color=("#4A148C", "#CE93D8"), font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=4, padx=10, pady=10, sticky="w")
+
             btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-            btn_frame.grid(row=0, column=4, padx=10, pady=5, sticky="e")
+            btn_frame.grid(row=0, column=5, padx=10, pady=5, sticky="e")
             
             edit_btn = ctk.CTkButton(btn_frame, text="Edit", width=60, command=lambda idx=i: self.open_plc_dialog(idx))
             edit_btn.pack(side="left", padx=(0, 5))
@@ -83,8 +91,8 @@ class PLCManagerView(ctk.CTkFrame):
         dialog = ctk.CTkToplevel(self)
         is_edit = edit_index is not None
         dialog.title("Edit Line / PLC" if is_edit else "Add New Line / PLC")
-        dialog.geometry("620x680")
-        dialog.minsize(580, 550)
+        dialog.geometry("620x740")
+        dialog.minsize(580, 600)
         dialog.grab_set()
         
         plcs = self.config_manager.get().get("plcs", [])
@@ -205,9 +213,49 @@ class PLCManagerView(ctk.CTkFrame):
         btn_add_m = ctk.CTkButton(dialog, text="➕ Add Another Machine", width=180, command=lambda: add_machine_row())
         btn_add_m.pack(pady=5)
 
+        # Date Filter Section
+        df_frame = ctk.CTkFrame(dialog, fg_color=("gray85", "gray17"), corner_radius=8)
+        df_frame.pack(fill="x", padx=20, pady=(5, 10))
+        
+        ctk.CTkLabel(df_frame, text="📅 Download Date Filter (การเลือกไฟล์ดาวน์โหลด):", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=12, pady=(8, 4))
+        
+        plc_df = plc_data.get("date_filter", {})
+        filter_mode_var = ctk.StringVar(value=plc_df.get("mode", "all"))
+        
+        radio_row = ctk.CTkFrame(df_frame, fg_color="transparent")
+        radio_row.pack(fill="x", padx=12, pady=(0, 6))
+        
+        date_inputs_row = ctk.CTkFrame(df_frame, fg_color="transparent")
+        
+        def toggle_date_mode():
+            if filter_mode_var.get() == "range":
+                date_inputs_row.pack(fill="x", padx=12, pady=(0, 8))
+            else:
+                date_inputs_row.pack_forget()
+
+        rb_all = ctk.CTkRadioButton(radio_row, text="All Files (ดาวน์โหลดไฟล์ทั้งหมด)", variable=filter_mode_var, value="all", command=toggle_date_mode)
+        rb_all.pack(side="left", padx=(0, 20))
+        
+        rb_range = ctk.CTkRadioButton(radio_row, text="Date Range (เลือกช่วงวันที่)", variable=filter_mode_var, value="range", command=toggle_date_mode)
+        rb_range.pack(side="left")
+        
+        ctk.CTkLabel(date_inputs_row, text="Start:").pack(side="left", padx=(0, 5))
+        start_date_ent = ctk.CTkEntry(date_inputs_row, width=105, placeholder_text="DD/MM/YYYY")
+        start_date_ent.insert(0, plc_df.get("start_date", ""))
+        start_date_ent.pack(side="left", padx=(0, 15))
+        
+        ctk.CTkLabel(date_inputs_row, text="End:").pack(side="left", padx=(0, 5))
+        end_date_ent = ctk.CTkEntry(date_inputs_row, width=105, placeholder_text="DD/MM/YYYY")
+        end_date_ent.insert(0, plc_df.get("end_date", ""))
+        end_date_ent.pack(side="left", padx=(0, 10))
+        
+        ctk.CTkLabel(date_inputs_row, text="(e.g. 01/05/2025)", font=ctk.CTkFont(size=11), text_color="gray").pack(side="left")
+
+        toggle_date_mode()
+
         # Bottom Save / Cancel
         bottom_bar = ctk.CTkFrame(dialog, fg_color="transparent")
-        bottom_bar.pack(fill="x", padx=20, pady=(10, 15))
+        bottom_bar.pack(fill="x", padx=20, pady=(5, 15))
         
         def save():
             line_name = name_entry.get().strip()
@@ -226,13 +274,32 @@ class PLCManagerView(ctk.CTkFrame):
             if not collected_machines:
                 collected_machines.append({"name": "MC1", "remote_dir": "/"})
 
+            df_mode = filter_mode_var.get()
+            s_date = start_date_ent.get().strip()
+            e_date = end_date_ent.get().strip()
+            if df_mode == "range":
+                import datetime
+                try:
+                    d1 = datetime.datetime.strptime(s_date, "%d/%m/%Y")
+                    d2 = datetime.datetime.strptime(e_date, "%d/%m/%Y")
+                    if d1 > d2:
+                        s_date, e_date = e_date, s_date
+                except Exception:
+                    test_status_lbl.configure(text="Invalid date format! Please use DD/MM/YYYY.", text_color="#FF5252")
+                    return
+
             new_data = {
                 "name": line_name,
                 "host": host,
                 "port": int(port_entry.get() if port_entry.get().isdigit() else 21),
                 "username": user_entry.get().strip(),
                 "password": pass_entry.get().strip(),
-                "machines": collected_machines
+                "machines": collected_machines,
+                "date_filter": {
+                    "mode": df_mode,
+                    "start_date": s_date,
+                    "end_date": e_date
+                }
             }
             if is_edit:
                 self.config_manager.update_plc(edit_index, new_data)
