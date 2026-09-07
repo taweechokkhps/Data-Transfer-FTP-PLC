@@ -6,8 +6,8 @@ CONFIG_FILE = "config.json"
 DEFAULT_CONFIG = {
     "global_settings": {
         "target_directory": "",
-        "file_extensions": [".csv", ".txt"],
-        "separate_by_date": True,
+        "file_extensions": [".txt", ".csv"],
+        "separate_by_date": False,
         "auto_pull_interval_minutes": 60
     },
     "plcs": []

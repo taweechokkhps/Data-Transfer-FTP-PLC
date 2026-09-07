@@ -1,6 +1,5 @@
 import customtkinter as ctk
 from tkinter import filedialog
-import datetime
 
 class SettingsView(ctk.CTkFrame):
     def __init__(self, master, config_manager, on_settings_changed=None, **kwargs):
@@ -28,24 +27,25 @@ class SettingsView(ctk.CTkFrame):
         btn_browse = ctk.CTkButton(target_row, text="Browse", width=80, command=self.browse_target_dir)
         btn_browse.pack(side="left")
         
-        # 2. File Extensions (No comma needed)
+        # 2. File Extensions (Default: .txt, .csv)
         ctk.CTkLabel(self, text="File Extensions to Download:").grid(row=3, column=0, padx=10, pady=(5, 2), sticky="w")
         
         ext_frame = ctk.CTkFrame(self, fg_color="transparent")
-        ext_frame.grid(row=4, column=0, padx=10, pady=(0, 15), sticky="w")
+        ext_frame.grid(row=4, column=0, padx=10, pady=(0, 10), sticky="w")
         
-        saved_exts = [e.lower() for e in self.config["global_settings"].get("file_extensions", [".csv", ".txt"])]
+        saved_exts = [e.lower() for e in self.config["global_settings"].get("file_extensions", [".txt", ".csv"])]
+        if not saved_exts:
+            saved_exts = [".txt", ".csv"]
+            
         self.std_ext_vars = {
-            ".csv": ctk.BooleanVar(value=".csv" in saved_exts),
             ".txt": ctk.BooleanVar(value=".txt" in saved_exts),
-            ".log": ctk.BooleanVar(value=".log" in saved_exts),
-            ".dat": ctk.BooleanVar(value=".dat" in saved_exts),
+            ".csv": ctk.BooleanVar(value=".csv" in saved_exts),
         }
         for ext, var in self.std_ext_vars.items():
             cb = ctk.CTkCheckBox(ext_frame, text=ext, variable=var)
-            cb.pack(side="left", padx=(0, 15))
+            cb.pack(side="left", padx=(0, 20))
             
-        self.custom_ext_entry = ctk.CTkEntry(ext_frame, width=70, placeholder_text=".tsv")
+        self.custom_ext_entry = ctk.CTkEntry(ext_frame, width=70, placeholder_text=".log")
         self.custom_ext_entry.pack(side="left", padx=(5, 5))
         btn_add = ctk.CTkButton(ext_frame, text="+ Add", width=55, command=self.add_custom_ext)
         btn_add.pack(side="left")
@@ -54,22 +54,16 @@ class SettingsView(ctk.CTkFrame):
         self.custom_chips_frame.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="w")
         self.custom_ext_list = [e for e in saved_exts if e not in self.std_ext_vars]
         self.render_custom_chips()
-
-        # 3. Separate by Date
-        date_str = datetime.datetime.now().strftime("%d-%m-%Y")
-        self.date_var = ctk.BooleanVar(value=self.config["global_settings"].get("separate_by_date", True))
-        self.date_check = ctk.CTkCheckBox(self, text=f"Automatically create folders by Date (e.g. {date_str})", variable=self.date_var)
-        self.date_check.grid(row=6, column=0, padx=10, pady=(10, 15), sticky="w")
         
-        # 4. Auto Pull Interval (Original clean input)
-        ctk.CTkLabel(self, text="Auto Pull Interval (Minutes) [0 = Disable]:").grid(row=7, column=0, padx=10, pady=(10, 2), sticky="w")
+        # 3. Auto Pull Interval (Minutes) [0 = Disable]
+        ctk.CTkLabel(self, text="Auto Pull Interval (Minutes) [0 = Disable]:").grid(row=6, column=0, padx=10, pady=(10, 2), sticky="w")
         self.interval_var = ctk.StringVar(value=str(self.config["global_settings"].get("auto_pull_interval_minutes", 60)))
         self.interval_entry = ctk.CTkEntry(self, textvariable=self.interval_var, width=120)
-        self.interval_entry.grid(row=8, column=0, padx=10, pady=(0, 25), sticky="w")
+        self.interval_entry.grid(row=7, column=0, padx=10, pady=(0, 25), sticky="w")
         
-        # 5. Save Button
+        # 4. Save Button
         save_frame = ctk.CTkFrame(self, fg_color="transparent")
-        save_frame.grid(row=9, column=0, padx=10, pady=10, sticky="w")
+        save_frame.grid(row=8, column=0, padx=10, pady=10, sticky="w")
         
         btn_save_settings = ctk.CTkButton(save_frame, text="Save Settings", font=ctk.CTkFont(weight="bold"), command=self.save_settings)
         btn_save_settings.pack(side="left")
@@ -106,7 +100,7 @@ class SettingsView(ctk.CTkFrame):
     def get_selected_extensions(self):
         exts = [ext for ext, var in self.std_ext_vars.items() if var.get()]
         exts.extend(self.custom_ext_list)
-        return exts if exts else [".csv"]
+        return exts if exts else [".txt", ".csv"]
 
     def browse_target_dir(self):
         dir_name = filedialog.askdirectory()
@@ -121,7 +115,7 @@ class SettingsView(ctk.CTkFrame):
         settings = {
             "target_directory": self.target_dir_var.get().strip(),
             "file_extensions": exts,
-            "separate_by_date": self.date_var.get(),
+            "separate_by_date": False,
             "auto_pull_interval_minutes": interval
         }
         self.config_manager.update_global_settings(settings)

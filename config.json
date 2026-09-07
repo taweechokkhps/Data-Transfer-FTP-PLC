@@ -2,10 +2,10 @@
     "global_settings": {
         "target_directory": "",
         "file_extensions": [
-            ".csv",
-            ".txt"
+            ".txt",
+            ".csv"
         ],
-        "separate_by_date": true,
+        "separate_by_date": false,
         "auto_pull_interval_minutes": 60
     },
     "plcs": [
