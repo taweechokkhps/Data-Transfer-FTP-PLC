@@ -85,15 +85,18 @@ class DashboardView(ctk.CTkFrame):
             logger.error(f"[{plc_data['name']}] Target directory not configured in Settings.")
             return
 
-        r_dirs_raw = plc_data.get('remote_directory', '')
-        remote_dirs = [d.strip() for d in r_dirs_raw.split(',') if d.strip()]
-        
+        machines = plc_data.get('machines')
+        if not machines:
+            r_dirs_raw = plc_data.get('remote_directory', '')
+            remote_dirs = [d.strip() for d in r_dirs_raw.split(',') if d.strip()]
+            machines = [{"name": f"MC{i+1}", "remote_dir": d} for i, d in enumerate(remote_dirs)]
+
         downloader = FTPDownloader(
             host=plc_data['host'],
             port=plc_data.get('port', 21),
             username=plc_data['username'],
             password=plc_data['password'],
-            remote_dirs=remote_dirs,
+            machines=machines,
             local_target_dir=target_dir,
             file_extensions=g_settings.get("file_extensions", [".csv", ".txt"]),
             separate_by_date=g_settings.get("separate_by_date", True),

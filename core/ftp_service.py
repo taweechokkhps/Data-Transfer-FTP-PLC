@@ -69,12 +69,25 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         return False, f"Failed to list directory: {e}"
 
 class FTPDownloader:
-    def __init__(self, host, port, username, password, remote_dirs, local_target_dir, file_extensions, separate_by_date, plc_name):
+    def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name):
         self.host = host
         self.port = int(port)
         self.username = username
         self.password = password
-        self.remote_dirs = [sanitize_remote_path(d) for d in remote_dirs if d.strip()]
+
+        # Support both machine list of dicts [{'name': '...', 'remote_dir': '...'}] and legacy remote_dirs list of str
+        self.machines = []
+        if machines and isinstance(machines[0], dict):
+            for m in machines:
+                m_name = m.get("name", "").strip() or "Machine"
+                m_dir = sanitize_remote_path(m.get("remote_dir", "/"))
+                self.machines.append({"name": m_name, "remote_dir": m_dir})
+        elif machines and isinstance(machines[0], str):
+            for idx, d in enumerate(machines):
+                self.machines.append({"name": f"MC{idx + 1}", "remote_dir": sanitize_remote_path(d)})
+        else:
+            self.machines.append({"name": "MC1", "remote_dir": "/"})
+
         self.local_target_dir = local_target_dir
         self.file_extensions = [ext.lower() for ext in file_extensions]
         self.separate_by_date = separate_by_date
@@ -121,44 +134,36 @@ class FTPDownloader:
             return False
 
         try:
-            files_by_dir = {}
+            files_by_machine = {}
             total_target_files = []
-            for r_dir in self.remote_dirs:
+            for m in self.machines:
                 if not self.is_running:
                     break
+                r_dir = m["remote_dir"]
                 try:
                     self.ftp.cwd(r_dir)
                     files = self.ftp.nlst()
                     t_files = [f for f in files if any(f.lower().endswith(ext) for ext in self.file_extensions)]
-                    files_by_dir[r_dir] = t_files
+                    files_by_machine[m["name"]] = (r_dir, t_files)
                     total_target_files.extend(t_files)
                 except Exception as e:
                     if log_callback:
-                        log_callback(f"[{self.plc_name}] Error accessing {r_dir}: {e}")
+                        log_callback(f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {e}")
 
             if not total_target_files:
                 if log_callback:
-                    log_callback(f"[{self.plc_name}] No matching files found in any directory.")
+                    log_callback(f"[{self.plc_name}] No matching files found in any machine directory.")
                 self.disconnect()
                 self.is_running = False
                 return True
 
             total_files = len(total_target_files)
             current_index = 0
-            dir_index = 1
-            
-            mc_names = {
-                1: "MC1 Connector Leak",
-                2: "MC2 Final And Resistance",
-                3: "MC3 Auto Appearance"
-            }
 
-            for r_dir, t_files in files_by_dir.items():
+            for m_name, (r_dir, t_files) in files_by_machine.items():
                 if not self.is_running:
                     break
-                sub_dir = mc_names.get(dir_index, f"MC{dir_index}")
-                save_dir = format_local_save_dir(self.local_target_dir, self.plc_name, sub_dir, self.separate_by_date)
-                dir_index += 1
+                save_dir = format_local_save_dir(self.local_target_dir, self.plc_name, m_name, self.separate_by_date)
 
                 try:
                     self.ftp.cwd(r_dir)
@@ -188,14 +193,14 @@ class FTPDownloader:
                     try:
                         with open(local_filepath, 'wb') as f:
                             if log_callback:
-                                log_callback(f"[{self.plc_name}] Downloading {r_dir}/{pure_filename}...")
+                                log_callback(f"[{self.plc_name}][{m_name}] Downloading {pure_filename}...")
                             self.ftp.retrbinary(f"RETR {filename}", f.write)
                         current_index += 1
                         if progress_callback:
                             progress_callback(current_index, total_files)
                     except Exception as e:
                         if log_callback:
-                            log_callback(f"[{self.plc_name}] Error downloading {filename}: {e}")
+                            log_callback(f"[{self.plc_name}][{m_name}] Error downloading {filename}: {e}")
 
             if log_callback:
                 log_callback(f"[{self.plc_name}] Download process completed.")

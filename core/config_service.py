@@ -30,6 +30,20 @@ class ConfigManager:
                     if "group" in plc:
                         del plc["group"]
                         needs_save = True
+                    
+                    # Migrate old comma-separated remote_directory to machines list
+                    if "machines" not in plc:
+                        r_dirs_raw = plc.get("remote_directory", "")
+                        dirs = [d.strip() for d in r_dirs_raw.split(",") if d.strip()]
+                        default_names = ["MC1 Connector Leak", "MC2 Final And Resistance", "MC3 Auto Appearance"]
+                        machines = []
+                        for idx, d in enumerate(dirs):
+                            name = default_names[idx] if idx < len(default_names) else f"MC{idx + 1}"
+                            machines.append({"name": name, "remote_dir": d})
+                        if not machines:
+                            machines.append({"name": "MC1", "remote_dir": "/"})
+                        plc["machines"] = machines
+                        needs_save = True
                 
                 if needs_save:
                     self.config = data

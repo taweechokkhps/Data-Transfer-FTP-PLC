@@ -8,5 +8,20 @@
         "separate_by_date": true,
         "auto_pull_interval_minutes": 60
     },
-    "plcs": []
+    "plcs": [
+        {
+            "name": "LINE 1",
+            "host": "192.168.1.169",
+            "port": 21,
+            "username": "user",
+            "password": "156900",
+            "remote_directory": "/Documents/Projects/data_record/TEST/Data-TEST",
+            "machines": [
+                {
+                    "name": "MC1 Connector Leak",
+                    "remote_dir": "/Documents/Projects/data_record/TEST/Data-TEST"
+                }
+            ]
+        }
+    ]
 }
