@@ -50,3 +50,25 @@ def format_local_save_dir(base_dir: str, plc_name: str, sub_dir: str = "", separ
         
     target.mkdir(parents=True, exist_ok=True)
     return target
+
+def parse_date_from_filename(filename: str) -> datetime.date | None:
+    """
+    Parse date from filename with DDMMYY format (e.g. 020425.txt -> 2025-04-02).
+    """
+    m = re.match(r'^(\d{2})(\d{2})(\d{2})', Path(filename).name)
+    if not m:
+        return None
+    dd, mm, yy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        year = 2000 + yy
+        return datetime.date(year, mm, dd)
+    except ValueError:
+        return None
+
+def format_batch_save_dir(base_dir: str, plc_name: str, machine_name: str, batch_folder_name: str) -> Path:
+    """
+    Format local batch save directory: base_dir / plc_name / machine_name / batch_folder_name
+    """
+    target = Path(base_dir) / plc_name / machine_name / batch_folder_name
+    target.mkdir(parents=True, exist_ok=True)
+    return target
