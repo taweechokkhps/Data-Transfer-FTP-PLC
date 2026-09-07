@@ -1,7 +1,6 @@
 import customtkinter as ctk
 from tkinter import filedialog
 import datetime
-from pathlib import Path
 
 class SettingsView(ctk.CTkFrame):
     def __init__(self, master, config_manager, on_settings_changed=None, **kwargs):
@@ -13,125 +12,81 @@ class SettingsView(ctk.CTkFrame):
 
     def build_view(self):
         # Header
-        header = ctk.CTkLabel(self, text="Global Settings", font=ctk.CTkFont(size=24, weight="bold"))
-        header.pack(anchor="w", padx=15, pady=(10, 15))
-
-        # Main scrollable settings container
-        content = ctk.CTkScrollableFrame(self)
-        content.pack(fill="both", expand=True, padx=15, pady=(0, 10))
-
-        # --- Section 1: Target Save Directory ---
-        sec1 = ctk.CTkFrame(content, fg_color="transparent")
-        sec1.pack(fill="x", padx=10, pady=10)
+        header = ctk.CTkLabel(self, text="Settings", font=ctk.CTkFont(size=24, weight="bold"))
+        header.grid(row=0, column=0, padx=10, pady=(10, 25), sticky="w")
         
-        ctk.CTkLabel(sec1, text="1. Target Save Directory (โฟลเดอร์ปลายทางในเครื่อง):", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 5))
+        # 1. Target Directory
+        ctk.CTkLabel(self, text="Target Save Directory:").grid(row=1, column=0, padx=10, pady=(5, 2), sticky="w")
         
-        dir_row = ctk.CTkFrame(sec1, fg_color="transparent")
-        dir_row.pack(fill="x")
+        target_row = ctk.CTkFrame(self, fg_color="transparent")
+        target_row.grid(row=2, column=0, padx=10, pady=(0, 15), sticky="w")
         
         self.target_dir_var = ctk.StringVar(value=self.config["global_settings"].get("target_directory", ""))
-        self.target_dir_var.trace_add("write", lambda *args: self.update_preview())
+        self.target_dir_entry = ctk.CTkEntry(target_row, textvariable=self.target_dir_var, width=340)
+        self.target_dir_entry.pack(side="left", padx=(0, 10))
         
-        self.target_dir_entry = ctk.CTkEntry(dir_row, textvariable=self.target_dir_var, width=380, placeholder_text="e.g. D:/PLC_Logs")
-        self.target_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        
-        btn_browse = ctk.CTkButton(dir_row, text="📁 Browse", width=90, command=self.browse_target_dir)
+        btn_browse = ctk.CTkButton(target_row, text="Browse", width=80, command=self.browse_target_dir)
         btn_browse.pack(side="left")
-
-        # --- Section 2: File Types (No commas!) ---
-        sec2 = ctk.CTkFrame(content, fg_color="transparent")
-        sec2.pack(fill="x", padx=10, pady=15)
         
-        ctk.CTkLabel(sec2, text="2. File Types to Download (เลือกชนิดไฟล์ที่ต้องการดึง):", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 5))
+        # 2. File Extensions (No comma needed)
+        ctk.CTkLabel(self, text="File Extensions to Download:").grid(row=3, column=0, padx=10, pady=(5, 2), sticky="w")
+        
+        ext_frame = ctk.CTkFrame(self, fg_color="transparent")
+        ext_frame.grid(row=4, column=0, padx=10, pady=(0, 15), sticky="w")
         
         saved_exts = [e.lower() for e in self.config["global_settings"].get("file_extensions", [".csv", ".txt"])]
-        
-        # Standard checkboxes row
-        cb_row = ctk.CTkFrame(sec2, fg_color="transparent")
-        cb_row.pack(fill="x", pady=5)
-        
         self.std_ext_vars = {
             ".csv": ctk.BooleanVar(value=".csv" in saved_exts),
             ".txt": ctk.BooleanVar(value=".txt" in saved_exts),
             ".log": ctk.BooleanVar(value=".log" in saved_exts),
             ".dat": ctk.BooleanVar(value=".dat" in saved_exts),
         }
-        
         for ext, var in self.std_ext_vars.items():
-            cb = ctk.CTkCheckBox(cb_row, text=ext, variable=var, command=self.update_preview)
-            cb.pack(side="left", padx=(0, 20))
-
-        # Custom extensions row
-        custom_row = ctk.CTkFrame(sec2, fg_color="transparent")
-        custom_row.pack(fill="x", pady=(8, 5))
+            cb = ctk.CTkCheckBox(ext_frame, text=ext, variable=var)
+            cb.pack(side="left", padx=(0, 15))
+            
+        self.custom_ext_entry = ctk.CTkEntry(ext_frame, width=70, placeholder_text=".tsv")
+        self.custom_ext_entry.pack(side="left", padx=(5, 5))
+        btn_add = ctk.CTkButton(ext_frame, text="+ Add", width=55, command=self.add_custom_ext)
+        btn_add.pack(side="left")
         
-        ctk.CTkLabel(custom_row, text="Add Custom Extension:").pack(side="left", padx=(0, 10))
-        self.custom_ext_entry = ctk.CTkEntry(custom_row, width=100, placeholder_text=".tsv")
-        self.custom_ext_entry.pack(side="left", padx=(0, 10))
-        
-        btn_add_ext = ctk.CTkButton(custom_row, text="+ Add", width=65, command=self.add_custom_ext)
-        btn_add_ext.pack(side="left")
-        
-        # Chips container for other extensions
-        self.custom_chips_frame = ctk.CTkFrame(sec2, fg_color="transparent")
-        self.custom_chips_frame.pack(fill="x", pady=5)
-        
+        self.custom_chips_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.custom_chips_frame.grid(row=5, column=0, padx=10, pady=(0, 10), sticky="w")
         self.custom_ext_list = [e for e in saved_exts if e not in self.std_ext_vars]
         self.render_custom_chips()
 
-        # --- Section 3: Folder Structure & Live Preview ---
-        sec3 = ctk.CTkFrame(content, fg_color="transparent")
-        sec3.pack(fill="x", padx=10, pady=15)
-        
-        ctk.CTkLabel(sec3, text="3. Folder Organization (การจัดโครงสร้างโฟลเดอร์):", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 5))
-        
+        # 3. Separate by Date
+        date_str = datetime.datetime.now().strftime("%d-%m-%Y")
         self.date_var = ctk.BooleanVar(value=self.config["global_settings"].get("separate_by_date", True))
-        self.date_check = ctk.CTkCheckBox(sec3, text="Automatically create date folders (สร้างโฟลเดอร์แยกตามวันที่ DD-MM-YYYY)",
-                                          variable=self.date_var, command=self.update_preview)
-        self.date_check.pack(anchor="w", pady=5)
+        self.date_check = ctk.CTkCheckBox(self, text=f"Automatically create folders by Date (e.g. {date_str})", variable=self.date_var)
+        self.date_check.grid(row=6, column=0, padx=10, pady=(10, 15), sticky="w")
         
-        # Live Preview Box
-        preview_box = ctk.CTkFrame(sec3, fg_color=("#F0F0F0", "#1E1E1E"), corner_radius=6)
-        preview_box.pack(fill="x", pady=(8, 5))
+        # 4. Auto Pull Interval (Original clean input)
+        ctk.CTkLabel(self, text="Auto Pull Interval (Minutes) [0 = Disable]:").grid(row=7, column=0, padx=10, pady=(10, 2), sticky="w")
+        self.interval_var = ctk.StringVar(value=str(self.config["global_settings"].get("auto_pull_interval_minutes", 60)))
+        self.interval_entry = ctk.CTkEntry(self, textvariable=self.interval_var, width=120)
+        self.interval_entry.grid(row=8, column=0, padx=10, pady=(0, 25), sticky="w")
         
-        ctk.CTkLabel(preview_box, text="🔍 Folder Structure Preview:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#7B1FA2").pack(anchor="w", padx=10, pady=(6, 2))
-        self.preview_lbl = ctk.CTkLabel(preview_box, text="", font=ctk.CTkFont(size=12), text_color="gray", justify="left")
-        self.preview_lbl.pack(anchor="w", padx=10, pady=(0, 8))
-        self.update_preview()
-
-        # --- Section 4: Auto Pull Interval ---
-        sec4 = ctk.CTkFrame(content, fg_color="transparent")
-        sec4.pack(fill="x", padx=10, pady=15)
+        # 5. Save Button
+        save_frame = ctk.CTkFrame(self, fg_color="transparent")
+        save_frame.grid(row=9, column=0, padx=10, pady=10, sticky="w")
         
-        ctk.CTkLabel(sec4, text="4. Auto Pull Interval (Minutes) [0 = Disable]:", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 5))
+        btn_save_settings = ctk.CTkButton(save_frame, text="Save Settings", font=ctk.CTkFont(weight="bold"), command=self.save_settings)
+        btn_save_settings.pack(side="left")
         
-        curr_interval = self.config["global_settings"].get("auto_pull_interval_minutes", 60)
-        self.interval_var = ctk.StringVar(value=str(curr_interval))
-        self.interval_entry = ctk.CTkEntry(sec4, textvariable=self.interval_var, width=120)
-        self.interval_entry.pack(anchor="w", pady=5)
-
-        # --- Bottom Save Bar ---
-        bot_bar = ctk.CTkFrame(self, fg_color="transparent")
-        bot_bar.pack(fill="x", padx=15, pady=(5, 15))
-        
-        btn_save = ctk.CTkButton(bot_bar, text="💾 Save Settings", font=ctk.CTkFont(weight="bold"), height=36, command=self.save_settings)
-        btn_save.pack(side="left", padx=5)
-        
-        self.saved_feedback = ctk.CTkLabel(bot_bar, text="", font=ctk.CTkFont(size=12, weight="bold"))
+        self.saved_feedback = ctk.CTkLabel(save_frame, text="", font=ctk.CTkFont(size=12, weight="bold"))
         self.saved_feedback.pack(side="left", padx=15)
 
     def render_custom_chips(self):
         for w in self.custom_chips_frame.winfo_children():
             w.destroy()
-            
         for ext in self.custom_ext_list:
-            chip = ctk.CTkFrame(self.custom_chips_frame, fg_color=("#E0E0E0", "#333333"), corner_radius=12)
-            chip.pack(side="left", padx=(0, 8), pady=2)
-            
-            ctk.CTkLabel(chip, text=ext, font=ctk.CTkFont(size=12)).pack(side="left", padx=(8, 4), pady=2)
-            del_b = ctk.CTkButton(chip, text="✕", width=18, height=18, fg_color="transparent", hover_color="#d32f2f",
+            chip = ctk.CTkFrame(self.custom_chips_frame, fg_color=("#E0E0E0", "#333333"), corner_radius=10)
+            chip.pack(side="left", padx=(0, 6), pady=2)
+            ctk.CTkLabel(chip, text=ext, font=ctk.CTkFont(size=11)).pack(side="left", padx=(6, 2), pady=1)
+            del_b = ctk.CTkButton(chip, text="✕", width=16, height=16, fg_color="transparent", hover_color="#d32f2f",
                                   text_color="gray", command=lambda e=ext: self.remove_custom_ext(e))
-            del_b.pack(side="left", padx=(0, 6), pady=2)
+            del_b.pack(side="left", padx=(0, 4), pady=1)
 
     def add_custom_ext(self):
         val = self.custom_ext_entry.get().strip().lower()
@@ -141,32 +96,17 @@ class SettingsView(ctk.CTkFrame):
             if val not in self.std_ext_vars and val not in self.custom_ext_list:
                 self.custom_ext_list.append(val)
                 self.render_custom_chips()
-                self.update_preview()
             self.custom_ext_entry.delete(0, "end")
 
     def remove_custom_ext(self, ext):
         if ext in self.custom_ext_list:
             self.custom_ext_list.remove(ext)
             self.render_custom_chips()
-            self.update_preview()
 
     def get_selected_extensions(self):
         exts = [ext for ext, var in self.std_ext_vars.items() if var.get()]
         exts.extend(self.custom_ext_list)
         return exts if exts else [".csv"]
-
-    def update_preview(self):
-        base = self.target_dir_var.get().strip() or "C:/TargetFolder"
-        today = datetime.datetime.now().strftime("%d-%m-%Y")
-        exts = self.get_selected_extensions()
-        sample_ext = exts[0] if exts else ".csv"
-        
-        if self.date_var.get():
-            preview_path = f"{base}/LINE 1/MC1 Leak Test/{today}/DATA001{sample_ext}"
-        else:
-            preview_path = f"{base}/LINE 1/MC1 Leak Test/DATA001{sample_ext}"
-            
-        self.preview_lbl.configure(text=preview_path)
 
     def browse_target_dir(self):
         dir_name = filedialog.askdirectory()

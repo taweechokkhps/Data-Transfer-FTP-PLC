@@ -200,16 +200,13 @@ class PLCManagerView(ctk.CTkFrame):
             row_data = {"frame": row_frame, "name_entry": name_ent, "dir_entry": dir_ent}
             machine_rows.append(row_data)
 
-        # Populate initial machines
+        # Populate initial machines (Default to 1 machine)
         init_machines = plc_data.get("machines", [])
         if init_machines:
             for m in init_machines:
                 add_machine_row(m.get("name", ""), m.get("remote_dir", ""))
         else:
-            # Default to 3 machines for new or migrated line
-            add_machine_row("MC1 Connector Leak", "/0_CARD/log0/")
-            add_machine_row("MC2 Final And Resistance", "/0_CARD/log1/")
-            add_machine_row("MC3 Auto Appearance", "/0_CARD/log2/")
+            add_machine_row("MC1", "/0_CARD/log0/")
 
         # Add Machine button
         btn_add_m = ctk.CTkButton(dialog, text="➕ Add Another Machine", width=180, command=lambda: add_machine_row())
