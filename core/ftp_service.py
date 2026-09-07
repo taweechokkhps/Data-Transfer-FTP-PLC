@@ -5,7 +5,8 @@ import time
 import datetime
 from pathlib import Path
 from contextlib import redirect_stdout
-from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir
+from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir, get_batch_subdirs
+from core.converter_service import convert_txt_to_csv
 from core.logger import logger
 
 def test_connection(host: str, port: int, username: str, password: str, timeout: int = 5, ftp_mode: str = "auto") -> tuple[bool, str]:
@@ -311,6 +312,7 @@ class FTPDownloader:
                 if not self.is_running:
                     break
                 save_dir = format_batch_save_dir(self.local_target_dir, self.plc_name, m_name, batch_folder_name)
+                plaintext_dir, csv_dir = get_batch_subdirs(save_dir)
 
                 ok, _ = self._try_cwd(self.ftp, r_dir)
                 if not ok:
@@ -323,12 +325,14 @@ class FTPDownloader:
                         break
 
                     pure_filename = Path(filename).name
-                    local_filepath = save_dir / pure_filename
+                    local_filepath = plaintext_dir / pure_filename
+                    csv_filename = f"{Path(pure_filename).stem}.csv"
+                    csv_filepath = csv_dir / csv_filename
 
-                    # Incremental check: if file exists and remote size is identical, skip
+                    # Incremental check: if plaintext file exists with identical size and csv exists, skip
                     try:
                         remote_size = self.ftp.size(filename)
-                        if local_filepath.exists() and remote_size and local_filepath.stat().st_size == remote_size:
+                        if local_filepath.exists() and csv_filepath.exists() and remote_size and local_filepath.stat().st_size == remote_size:
                             current_index += 1
                             if progress_callback:
                                 progress_callback(current_index, total_files)
@@ -344,6 +348,18 @@ class FTPDownloader:
                         f_size_kb = local_filepath.stat().st_size / 1024
                         if log_callback:
                             log_callback(f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms")
+
+                        # Auto convert to CSV
+                        conv_start = time.perf_counter()
+                        ok_conv, conv_err, row_count = convert_txt_to_csv(local_filepath, csv_filepath)
+                        conv_ms = (time.perf_counter() - conv_start) * 1000
+                        if ok_conv:
+                            if log_callback:
+                                log_callback(f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filename} ({row_count} rows) in {conv_ms:.1f} ms")
+                        else:
+                            if log_callback:
+                                log_callback(f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}")
+
                         current_index += 1
                         if progress_callback:
                             progress_callback(current_index, total_files)

@@ -40,9 +40,9 @@
                 }
             ],
             "date_filter": {
-                "mode": "all",
-                "start_date": "",
-                "end_date": ""
+                "mode": "range",
+                "start_date": "14/05/2025",
+                "end_date": "14/05/2025"
             },
             "ftp_mode": "auto"
         }
