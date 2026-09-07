@@ -47,6 +47,11 @@ class ConfigManager:
                             machines.append({"name": "MC1", "remote_dir": "/"})
                         plc["machines"] = machines
                         needs_save = True
+
+                    # Ensure date_filter schema exists
+                    if "date_filter" not in plc:
+                        plc["date_filter"] = {"mode": "all", "start_date": "", "end_date": ""}
+                        needs_save = True
                 
                 # Ensure target_directory has a default if empty
                 if not data.get("global_settings", {}).get("target_directory", "").strip():
