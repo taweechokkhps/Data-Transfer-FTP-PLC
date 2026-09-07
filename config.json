@@ -24,7 +24,8 @@
                 "mode": "all",
                 "start_date": "",
                 "end_date": ""
-            }
+            },
+            "ftp_mode": "auto"
         },
         {
             "name": "LINE 1",
@@ -42,7 +43,8 @@
                 "mode": "all",
                 "start_date": "",
                 "end_date": ""
-            }
+            },
+            "ftp_mode": "auto"
         }
     ]
 }

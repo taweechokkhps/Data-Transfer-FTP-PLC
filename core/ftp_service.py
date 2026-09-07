@@ -1,6 +1,7 @@
 import ftplib
 import os
 import io
+import time
 import datetime
 from pathlib import Path
 from contextlib import redirect_stdout
@@ -224,6 +225,7 @@ class FTPDownloader:
             return False, str(e)
 
     def download_files(self, progress_callback=None, log_callback=None) -> bool:
+        start_time = time.time()
         self.is_running = True
         success, msg = self.connect(log_callback)
         if not success:
@@ -346,8 +348,11 @@ class FTPDownloader:
                         if log_callback:
                             log_callback(f"[{self.plc_name}][{m_name}] Error downloading {filename}: {e}")
 
+            elapsed = time.time() - start_time
+            mins, secs = divmod(int(elapsed), 60)
+            dur_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.1f}s"
             if log_callback:
-                log_callback(f"[{self.plc_name}] Download process completed.")
+                log_callback(f"[{self.plc_name}] Download process completed in {dur_str} ({current_index}/{total_files} files).")
         except Exception as e:
             if log_callback:
                 log_callback(f"[{self.plc_name}] FTP Error: {e}")

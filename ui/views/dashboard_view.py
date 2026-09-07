@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import threading
+import time
 from pathlib import Path
 from tkinter import filedialog
 from core.ftp_service import test_connection, FTPDownloader
@@ -119,17 +120,20 @@ class DashboardView(ctk.CTkFrame):
             date_btn.pack(side="left", padx=8, pady=10)
             ToolTip(date_btn, "คลิกเพื่อแก้ไขช่วงวันที่ดาวน์โหลด (Click to edit date filter)")
 
-            pb = ctk.CTkProgressBar(frame, width=130)
+            pb = ctk.CTkProgressBar(frame, width=120)
             pb.set(0)
-            pb.pack(side="left", padx=15, pady=10)
+            pb.pack(side="left", padx=10, pady=10)
             
-            status = ctk.CTkLabel(frame, text="Ready")
-            status.pack(side="left", padx=10, pady=10)
+            status = ctk.CTkLabel(frame, text="Ready", width=65, anchor="w")
+            status.pack(side="left", padx=(5, 2), pady=10)
+
+            timer_lbl = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray", width=60, anchor="w")
+            timer_lbl.pack(side="left", padx=(2, 10), pady=10)
             
             small_btn.configure(command=lambda p=plc, stat=status: self.test_single_connection(p, stat))
             
-            btn = ctk.CTkButton(frame, text="Download", font=ctk.CTkFont(weight="bold"), text_color="white",
-                                command=lambda p=plc, progress=pb, stat=status: self.download_single(p, progress, stat))
+            btn = ctk.CTkButton(frame, text="Download", font=ctk.CTkFont(weight="bold"), text_color="white")
+            btn.configure(command=lambda p=plc, progress=pb, stat=status, t_lbl=timer_lbl, b=btn: self.download_single(p, progress, stat, t_lbl, b))
             btn.pack(side="right", padx=10, pady=10)
 
     def test_single_connection(self, plc_data, status_label):
@@ -150,7 +154,7 @@ class DashboardView(ctk.CTkFrame):
                 logger.error(f"[{plc_data['name']}] Connection Test: Failed ({msg})")
         threading.Thread(target=run, daemon=True).start()
 
-    def download_single(self, plc_data, progress_bar, status_label):
+    def download_single(self, plc_data, progress_bar, status_label, timer_label=None, action_button=None):
         g_settings = self.config_manager.get()["global_settings"]
         target_dir = self.target_dir_var.get().strip() or g_settings.get("target_directory", "").strip()
         if not target_dir:
@@ -179,6 +183,23 @@ class DashboardView(ctk.CTkFrame):
             ftp_mode=plc_data.get("ftp_mode", "auto")
         )
 
+        start_time = time.time()
+        is_running = [True]
+
+        def update_timer_ui():
+            if is_running[0] and timer_label:
+                elapsed = int(time.time() - start_time)
+                mins, secs = divmod(elapsed, 60)
+                timer_label.configure(text=f"⏱ {mins:02d}:{secs:02d}", text_color="#3B8ED0")
+                self.after(500, update_timer_ui)
+
+        if timer_label:
+            timer_label.configure(text="⏱ 00:00", text_color="#3B8ED0")
+            self.after(500, update_timer_ui)
+
+        if action_button:
+            action_button.configure(state="disabled")
+
         def update_progress(current, total):
             prog = current / total if total > 0 else 0
             self.after(0, lambda: progress_bar.set(prog))
@@ -191,8 +212,18 @@ class DashboardView(ctk.CTkFrame):
             self.after(0, lambda: status_label.configure(text="Connecting..."))
             self.after(0, lambda: progress_bar.set(0))
             logger.info(f"Starting download for {plc_data['name']}...")
-            downloader.download_files(progress_callback=update_progress, log_callback=log_cb)
-            self.after(0, lambda: status_label.configure(text="Finished"))
+            try:
+                downloader.download_files(progress_callback=update_progress, log_callback=log_cb)
+            finally:
+                is_running[0] = False
+                elapsed = time.time() - start_time
+                mins, secs = divmod(int(elapsed), 60)
+                time_str = f"{mins:02d}:{secs:02d}"
+                self.after(0, lambda: status_label.configure(text="Finished"))
+                if timer_label:
+                    self.after(0, lambda: timer_label.configure(text=f"⏱ {time_str}", text_color="#00E676"))
+                if action_button:
+                    self.after(0, lambda: action_button.configure(state="normal"))
 
         threading.Thread(target=run, daemon=True).start()
 
