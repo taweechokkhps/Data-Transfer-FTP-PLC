@@ -99,33 +99,16 @@ class SettingsView(ctk.CTkFrame):
         self.preview_lbl.pack(anchor="w", padx=10, pady=(0, 8))
         self.update_preview()
 
-        # --- Section 4: Auto Pull Schedule ---
+        # --- Section 4: Auto Pull Interval ---
         sec4 = ctk.CTkFrame(content, fg_color="transparent")
         sec4.pack(fill="x", padx=10, pady=15)
         
-        ctk.CTkLabel(sec4, text="4. Auto Pull Schedule (รอบเวลาดึงข้อมูลอัตโนมัติ):", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(sec4, text="4. Auto Pull Interval (Minutes) [0 = Disable]:", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 5))
         
         curr_interval = self.config["global_settings"].get("auto_pull_interval_minutes", 60)
-        self.sched_mode_var = ctk.StringVar(value="auto" if curr_interval > 0 else "manual")
-        
-        mode_frame = ctk.CTkFrame(sec4, fg_color="transparent")
-        mode_frame.pack(fill="x", pady=5)
-        
-        r_manual = ctk.CTkRadioButton(mode_frame, text="Manual (ดึงด้วยตนเองเท่านั้น ไม่ตั้งเวลา)", variable=self.sched_mode_var, value="manual", command=self.toggle_sched_input)
-        r_manual.pack(anchor="w", pady=3)
-        
-        r_auto_row = ctk.CTkFrame(mode_frame, fg_color="transparent")
-        r_auto_row.pack(fill="x", pady=3)
-        
-        r_auto = ctk.CTkRadioButton(r_auto_row, text="Automatic (ดึงอัตโนมัติทุกๆ):", variable=self.sched_mode_var, value="auto", command=self.toggle_sched_input)
-        r_auto.pack(side="left", padx=(0, 10))
-        
-        self.interval_var = ctk.StringVar(value=str(curr_interval if curr_interval > 0 else 60))
-        self.interval_entry = ctk.CTkEntry(r_auto_row, textvariable=self.interval_var, width=70)
-        self.interval_entry.pack(side="left", padx=(0, 10))
-        
-        ctk.CTkLabel(r_auto_row, text="Minutes (นาที)").pack(side="left")
-        self.toggle_sched_input()
+        self.interval_var = ctk.StringVar(value=str(curr_interval))
+        self.interval_entry = ctk.CTkEntry(sec4, textvariable=self.interval_var, width=120)
+        self.interval_entry.pack(anchor="w", pady=5)
 
         # --- Bottom Save Bar ---
         bot_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -136,12 +119,6 @@ class SettingsView(ctk.CTkFrame):
         
         self.saved_feedback = ctk.CTkLabel(bot_bar, text="", font=ctk.CTkFont(size=12, weight="bold"))
         self.saved_feedback.pack(side="left", padx=15)
-
-    def toggle_sched_input(self):
-        if self.sched_mode_var.get() == "auto":
-            self.interval_entry.configure(state="normal")
-        else:
-            self.interval_entry.configure(state="disabled")
 
     def render_custom_chips(self):
         for w in self.custom_chips_frame.winfo_children():
@@ -198,10 +175,8 @@ class SettingsView(ctk.CTkFrame):
 
     def save_settings(self):
         exts = self.get_selected_extensions()
-        interval = 0
-        if self.sched_mode_var.get() == "auto":
-            val = self.interval_var.get().strip()
-            interval = int(val) if val.isdigit() and int(val) > 0 else 60
+        val = self.interval_var.get().strip()
+        interval = int(val) if val.isdigit() else 0
             
         settings = {
             "target_directory": self.target_dir_var.get().strip(),
