@@ -17,7 +17,7 @@ echo [3/3] Building Executable with Nuitka...
 :: --include-data-dir : Bundle customtkinter assets
 :: --windows-console-mode=disable : Hide the black CMD console when running the GUI
 
-python -m nuitka --onefile --output-filename=FTP_Control.exe --enable-plugin=tk-inter --include-data-dir=venv\Lib\site-packages\customtkinter=customtkinter --windows-console-mode=disable --windows-icon-from-ico=app_icon.ico --include-data-files=app_icon.png=app_icon.png main.py
+python -m nuitka --onefile --output-filename=FTP_Control.exe --enable-plugin=tk-inter --include-package=core --include-package=ui --include-data-dir=venv\Lib\site-packages\customtkinter=customtkinter --windows-console-mode=disable --windows-icon-from-ico=app_icon.ico --include-data-files=app_icon.png=app_icon.png main.py
 
 echo ====================================================
 echo Build Complete! You can find your compiled program

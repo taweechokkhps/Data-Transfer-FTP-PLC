@@ -1,7 +1,7 @@
 # เอกสารสรุปภาพรวมโปรเจกต์ (Project Summary)
-## Keyence PLC Data Transfer FTP (FTP Control)
+## Keyence PLC Data Transfer FTP (FTP Control) - v1.1.0
 
-> **บันทึกเอกสารเมื่อ:** 7 กันยายน 2026  
+> **บันทึกเอกสารเมื่อ:** 7 กันยายน 2026 (ปรับปรุงเป็น v1.1.0 Modular Architecture)  
 > **ที่ตั้งโปรเจกต์:** `C:\Users\user\Desktop\Data Transfer FTP\Data Transfer FTP`  
 > **ไฟล์สรุปนี้จัดเก็บที่:** `C:\Users\user\Desktop\Data Transfer FTP\Data Transfer FTP\SAMARY\PROJECT_SUMMARY.md`
 
@@ -11,9 +11,12 @@
 
 **Keyence PLC Data Transfer FTP** (ชื่อโปรแกรมใน UI: *FTP Get Data Record Process Critical Control* หรือ *FTP Control*) เป็นโปรแกรม Desktop Application ที่พัฒนาด้วยภาษา **Python** ร่วมกับ **CustomTkinter** โดยมีวัตถุประสงค์เพื่อ:
 1. **เชื่อมต่อและดึงไฟล์ข้อมูลการผลิต (Process Data / Log Files)** เช่น ไฟล์นามสกุล `.csv`, `.txt` จากการ์ดหน่วยความจำของเครื่อง **Keyence PLC** ผ่านโปรโตคอล **FTP** (File Transfer Protocol)
-2. **จัดระเบียบโครงสร้างการจัดเก็บไฟล์บนเครื่องคอมพิวเตอร์ให้อัตโนมัติ** โดยสามารถแยกโฟลเดอร์ตามชื่อเครื่อง PLC, ชื่อกระบวนการ/เครื่องจักรย่อย (MC) และแยกตามวันที่บันทึก (`DD-MM-YYYY`)
-3. **ระบบดึงข้อมูลอัตโนมัติตามรอบเวลา (Auto Pull Scheduler)** ที่สามารถตั้งความถี่รอบการดึงไฟล์ในระดับนาที พร้อมตัวนับถอยหลัง (Cooldown Timer) แสดงบนหน้าจอ
-4. **ความสะดวกในการใช้งานแบบพกพา (Standalone Executable)** สามารถคอมไพล์เป็นไฟล์ `.exe` ตัวเดียว (`FTP_Control.exe`) ด้วย **Nuitka** นำไปเปิดใช้งานบนเครื่อง Windows ใดๆ ได้ทันทีโดยไม่ต้องลง Python
+2. **ระบบเลือกโฟลเดอร์บน FTP (Remote FTP Folder Browser):** สำรวจและเลือกโฟลเดอร์บน PLC ได้ด้วยการกดปุ่ม Browse ไม่ต้องพิมพ์ Path เอง
+3. **ระบบแปลงและทำความสะอาด Path อัตโนมัติ (Auto Path Sanitizer):** ป้องกันข้อผิดพลาด (เช่น Error 550 จากการเผลอใส่ Path แบบ Windows `C:\...` หรือ `\`) โดยแปลงเป็นรูปแบบ FTP ที่ถูกต้องให้อัตโนมัติ
+4. **จัดระเบียบโครงสร้างการจัดเก็บไฟล์บนเครื่องคอมพิวเตอร์ให้อัตโนมัติ:** แยกโฟลเดอร์ตามชื่อเครื่อง PLC, ชื่อกระบวนการ/เครื่องจักรย่อย (MC) และแยกตามวันที่บันทึก (`DD-MM-YYYY`)
+5. **ระบบดึงข้อมูลอัตโนมัติตามรอบเวลา (Auto Pull Scheduler):** ตั้งความถี่รอบการดึงไฟล์ในระดับนาที พร้อมตัวนับถอยหลัง (Cooldown Timer)
+6. **ระบบบันทึก Log ลงไฟล์อัตโนมัติ (Persistent Logger):** มีการเขียน Log ลงไฟล์ `logs/app.log` เพื่อให้ตรวจสอบปัญหาย้อนหลังได้
+7. **ความสะดวกในการใช้งานแบบพกพา (Standalone Executable):** คอมไพล์เป็นไฟล์ `.exe` ตัวเดียว (`FTP_Control.exe`) ด้วย **Nuitka** นำไปเปิดใช้งานบนเครื่อง Windows ใดๆ ได้ทันทีโดยไม่ต้องลง Python
 
 ---
 
@@ -22,177 +25,94 @@
 ```text
 C:\Users\user\Desktop\Data Transfer FTP\Data Transfer FTP\
 │
-├── SAMARY\                         # [โฟลเดอร์นี้] เก็บเอกสารสรุปโครงการ
-│   └── PROJECT_SUMMARY.md          # ไฟล์สรุปภาพรวมการทำงานและคู่มือทั้งหมด
+├── SAMARY\                         # เก็บเอกสารสรุปโครงการ
+│   ├── PROJECT_SUMMARY.md          # เอกสารสรุปฉบับเต็ม (ไฟล์นี้)
+│   └── SUMMARY.md                  # เอกสารสรุปย่อ
+│
+├── core/                           # เลเยอร์ Business Logic & Services
+│   ├── __init__.py
+│   ├── path_utils.py               # ตัวจัดการและกรอง Path FTP / Local Directory
+│   ├── ftp_service.py              # ตัวเชื่อมต่อ FTP, ดาวน์โหลด และสำรวจโฟลเดอร์
+│   ├── config_service.py           # จัดการอ่าน/เขียนบันทึกการตั้งค่าลง config.json
+│   └── logger.py                   # ระบบ Log กลาง (ส่ง UI Console + บันทึกลง logs/app.log)
+│
+├── ui/                             # เลเยอร์ Graphical User Interface (CustomTkinter)
+│   ├── __init__.py
+│   ├── app.py                      # หน้าต่างหลัก Navigation Sidebar และระบบ Theme
+│   ├── components/
+│   │   ├── __init__.py
+│   │   ├── tooltip.py              # วิดเจ็ต Tooltip แสดงคำแนะนำเมื่อชี้เมาส์
+│   │   ├── log_console.py          # กล่องข้อความ Log Console แยกสี พร้อมปุ่ม Clear
+│   │   └── ftp_browser_dialog.py   # หน้าต่าง Modal เลือกโฟลเดอร์บนเครื่อง PLC
+│   └── views/
+│       ├── __init__.py
+│       ├── dashboard_view.py       # หน้า Overview, การ์ดแสดง PLC, ปุ่มดึงไฟล์, Cooldown
+│       ├── plc_manager_view.py     # หน้า PLC Manager พร้อมปุ่ม Test และ Browse FTP
+│       └── settings_view.py        # หน้า Settings เลือกโฟลเดอร์ นามสกุล และรอบเวลา
+│
+├── tests/                          # ชุดทดสอบ Unit Tests
+│   ├── test_path_utils.py          # ทดสอบ Path Sanitizer
+│   ├── test_config_and_logger.py   # ทดสอบ ConfigManager และ AppLogger
+│   └── test_ftp_service.py         # ทดสอบการเชื่อมต่อและสำรวจโฟลเดอร์ FTP
 │
 ├── main.py                         # จุดเริ่มต้นรันโปรแกรม (Entry Point)
-├── gui.py                          # ส่วนติดต่อผู้ใช้ (Graphical User Interface)
-├── ftp_client.py                   # ตัวจัดการการเชื่อมต่อและดาวน์โหลดไฟล์ผ่าน FTP
-├── config_manager.py               # จัดการอ่าน/เขียนบันทึกการตั้งค่าลง config.json
-├── config.json                     # ไฟล์เก็บคอนฟิก (Global Settings & รายชื่อ PLC)
-│
-├── requirements.txt                # ไลบรารีที่จำเป็นสำหรับพัฒนา (customtkinter, imageio)
-├── build.bat                       # สคริปต์ Nuitka Build ตัวเต็ม (ลง lib + compile exe)
-├── build_quick.bat                 # สคริปต์ Nuitka Build ด่วน (compile exe ทันที)
-├── FTP_Control.exe                 # ไฟล์โปรแกรมที่ Compile สำเร็จแล้ว พร้อมใช้งาน
+├── config.json                     # ไฟล์เก็บคอนฟิก
+├── requirements.txt                # ไลบรารีที่จำเป็น (customtkinter, imageio)
+├── build.bat                       # สคริปต์ Nuitka Build ตัวเต็ม
+├── build_quick.bat                 # สคริปต์ Nuitka Build ด่วน
+├── FTP_Control.exe                 # ไฟล์โปรแกรมที่ Compile สำเร็จแล้ว
 │
 ├── app_icon.ico                    # ไอคอนโปรแกรมสำหรับไฟล์ .exe (Windows Icon)
 ├── app_icon.png                    # ไอคอนโปรแกรมสำหรับแสดงผลบนหน้าต่าง GUI
 ├── README.md                       # คู่มือการใช้งานเบื้องต้น
 │
-├── venv\                           # Python Virtual Environment (Python 3.9)
-├── main.build\                     # โฟลเดอร์ Cache ชั่วคราวจากการ Build ของ Nuitka
-├── main.dist\                      # โฟลเดอร์ผลลัพธ์การ Build
-└── main.onefile-build\             # โฟลเดอร์แคชการสร้างไฟล์แบบ Onefile
+├── gui.py                          # Compatibility shim -> ui.app
+├── ftp_client.py                   # Compatibility shim -> core.ftp_service
+└── config_manager.py               # Compatibility shim -> core.config_service
 ```
 
 ---
 
 ## 3. สถาปัตยกรรมและการทำงานของแต่ละโมดูล (Module Architecture)
 
-### 3.1 `main.py`
-- ทำหน้าที่เป็น Entry point สั้นๆ สำหรับเปิดโปรแกรม
-- เรียกคลาส `App()` จาก `gui.py` และสั่ง `app.mainloop()`
+### 3.1 `core/path_utils.py`
+- **`sanitize_remote_path(path_str)`**:
+  - ตัดช่องว่างหน้า-หลัง
+  - แปลง Backslash `\` เป็น Forward Slash `/`
+  - ตัด Windows Drive Letters (เช่น `C:`, `D:`) ออกอัตโนมัติ เพื่อป้องกัน FTP Error 550
+  - จัดการเครื่องหมาย Slash ซ้ำซ้อนให้เหลือชั้นเดียว
+- **`format_local_save_dir(...)`**:
+  - จัดการสร้างโฟลเดอร์ปลายทางบนคอมพิวเตอร์อย่างปลอดภัยผ่าน `pathlib.Path`
 
-### 3.2 `config_manager.py` (Config Management)
-- **คลาส `ConfigManager`**:
-  - โหลดและบันทึกข้อมูลการตั้งค่าลงในไฟล์ `config.json`
-  - มีค่า Default Configuration อัตโนมัติหากยังไม่มีไฟล์
-  - รองรับ CRUD สำหรับ PLC (`add_plc`, `update_plc`, `delete_plc`)
-  - ฟังก์ชัน `update_global_settings` สำหรับบันทึกการตั้งค่าส่วนกลาง
-  - มี Migration Logic เพื่อล้างคีย์เก่าที่ไม่ใช้แล้ว (เช่น ลบฟิลด์ `"group"` ออกอัตโนมัติ)
+### 3.2 `core/ftp_service.py`
+- **`test_connection(...)`**: ฟังก์ชันทดสอบการเชื่อมต่อไปยัง PLC ด้วย timeout 5 วินาที
+- **`list_remote_directories(...)`**: ฟังก์ชันสำรวจโฟลเดอร์ย่อยใน Path ที่กำหนดบน FTP Server สำหรับระบบ FTP Browser
+- **`FTPDownloader`**: คลาสจัดการดาวน์โหลดไฟล์:
+  - เชื่อมต่อและดักจับข้อความ Debug Log
+  - ตรวจสอบขนาดไฟล์ก่อนดาวน์โหลด หากขนาดตรงกันจะข้ามเพื่อประหยัดเวลา (Incremental check)
+  - แมปโฟลเดอร์ต้นทางเข้ากับชื่อเครื่องจักร (`MC1 Connector Leak`, `MC2 Final And Resistance`, `MC3 Auto Appearance`)
+  - มีฟังก์ชัน `stop()` เพื่อยกเลิกอย่างปลอดภัย
 
-**โครงสร้างข้อมูลใน `config.json`:**
-```json
-{
-    "global_settings": {
-        "target_directory": "D:/Data_Logs",
-        "file_extensions": [".csv", ".txt"],
-        "separate_by_date": true,
-        "auto_pull_interval_minutes": 60
-    },
-    "plcs": [
-        {
-            "name": "Line 1 PLC",
-            "host": "192.168.0.10",
-            "port": 21,
-            "username": "ftp",
-            "password": "",
-            "remote_directory": "/0_CARD/log0/,/0_CARD/log1/,/0_CARD/log2/"
-        }
-    ]
-}
-```
+### 3.3 `core/config_service.py`
+- จัดการอ่าน/เขียนไฟล์ `config.json` มีระบบ Default Fallback และ Data Migration
 
-### 3.3 `ftp_client.py` (FTP Engine)
-- **คลาส `FTPDownloader`**:
-  - จัดการเชื่อมต่อ FTP โดยใช้ไลบรารีมาตรฐาน `ftplib` ของ Python
-  - ดักจับ Debug Log ของ FTP ผ่าน `redirect_stdout` เพื่อรายงานข้อความแจ้งเตือนที่ละเอียด (เช่น Error 530 เมื่อรหัสผ่านผิดพลาด)
-  - **การจับคู่นามสกุลไฟล์:** กรองเฉพาะไฟล์ที่มีนามสกุลตรงกับ `file_extensions`
-  - **การจับคู่โฟลเดอร์ต้นทางกับเครื่องจักร (Machine Mapping):**
-    - เมื่อกำหนด `remote_directories` แบบคั่นด้วยเครื่องหมายจุลภาค (comma `,`)
-    - ไดเรกทอรีลำดับที่ 1 จะถูกจัดเก็บเข้าโฟลเดอร์: `MC1 Connector Leak`
-    - ไดเรกทอรีลำดับที่ 2 จะถูกจัดเก็บเข้าโฟลเดอร์: `MC2 Final And Resistance`
-    - ไดเรกทอรีลำดับที่ 3 จะถูกจัดเก็บเข้าโฟลเดอร์: `MC3 Auto Appearance`
-    - ไดเรกทอรีลำดับถัดไปจะตั้งชื่อเป็น `MC{index}`
-  - **โครงสร้างการบันทึกไฟล์ปลายทาง (Local Directory Structure):**
-    ```text
-    {TargetFolder}/
-    └── {PLC_Name}/
-        ├── MC1 Connector Leak/
-        │   └── 07-09-2026/
-        │       └── DATA001.CSV
-        ├── MC2 Final And Resistance/
-        │   └── 07-09-2026/
-        │       └── DATA002.CSV
-        └── MC3 Auto Appearance/
-            └── 07-09-2026/
-                └── DATA003.CSV
-    ```
-  - รองรับ Callback Function เพื่ออัปเดตเปอร์เซ็นต์ Progress Bar (`progress_callback`) และข้อความ Log Console (`log_callback`) แบบ Real-time
-  - มีฟังก์ชัน `stop()` เพื่อยกเลิกการดาวน์โหลดอย่างปลอดภัย
+### 3.4 `core/logger.py`
+- ซิงเกิลตัน `AppLogger` กระจายข้อความ Log ไปยังหน้าจอ UI (แยกแท็ก error / warning / success) พร้อมทั้งเขียนลงไฟล์ `logs/app.log` หมุนเวียนขนาดไม่เกิน 5MB
 
-### 3.4 `gui.py` (Graphical User Interface)
-- ใช้ **CustomTkinter** แบบ **Dark Mode** คุมโทนสีม่วง (`#7B1FA2`, `#4A148C`)
-- ประกอบด้วย 3 หน้าต่างหลัก (เมนูด้านซ้าย):
-  1. **Overview (Dashboard)**:
-     - แสดงการ์ดรายการของแต่ละ PLC
-     - ปุ่ม **🔌 Test Connection**: ยิงคำสั่งทดสอบเชื่อมต่อ FTP ใน Thread แยก พร้อมแสดงสถานะ (`Testing...`, `Conn OK`, `Conn Fail`)
-     - แสดง Progress Bar และจำนวนไฟล์ที่ดึงเสร็จ (`Current/Total`)
-     - ปุ่ม **Download** ประจำแต่ละ PLC
-     - ปุ่ม **Download All** ด้านล่าง สำหรับสั่งดึงข้อมูลจากทุก PLC พร้อมกัน
-     - ข้อความนับถอยหลัง **Cooldown Timer** (เช่น `Next Auto Pull in: 45:12`)
-     - **Log Console** หน้าต่างแสดงผลข้อความการทำงาน แยกสีชัดเจน:
-       - สีแดง: ข้อความ Error / Failure
-       - สีส้ม: ข้อความ Warning
-       - สีเขียว: ข้อความ Success / Completed
-  2. **PLC Manager**:
-     - หน้าจัดการ เพิ่ม/แก้ไข/ลบ PLC
-     - ตารางแสดง Name, Host:Port, Username, Remote Directories
-     - มีหน้าต่าง Modal Dialog สำหรับระบุค่าต่าง ๆ
-  3. **Settings**:
-     - เลือก Target Save Directory ผ่านระบบเลือกโฟลเดอร์ Windows (Folder Browser)
-     - กำหนดนามสกุลไฟล์ที่ต้องการ เช่น `.csv, .txt`
-     - สวิตช์ Checkbox เปิด/ปิด การแยกโฟลเดอร์ตามวันที่ (`separate_by_date`)
-     - กำหนดช่วงเวลาดึงอัตโนมัติ (นาที) หรือใส่ `0` หากต้องการปิด
+### 3.5 `ui/components/ftp_browser_dialog.py`
+- หน้าต่างสำรวจโฟลเดอร์บน FTP:
+  - มีช่อง Address Bar พร้อมปุ่ม **⬆ Up** เพื่อถอยกลับโฟลเดอร์แม่
+  - แสดงรายการโฟลเดอร์ทั้งหมด ดับเบิลคลิกเพื่อเข้าสู่โฟลเดอร์ย่อย
+  - กดปุ่ม **Select This Directory** เพื่อนำ Path ไปใส่ในหน้าต่างตั้งค่า PLC อัตโนมัติ
 
 ---
 
-## 4. ระบบเบื้องหลังสำคัญ (Key Internal Mechanisms)
+## 4. สรุปผลการปรับปรุง (Refactoring Summary)
 
-1. **การทำงานแบบ Multi-threading:**
-   - การทดสอบการเชื่อมต่อและการดาวน์โหลดไฟล์ถูกรันบน `threading.Thread(daemon=True)` ทั้งหมด ทำให้หน้าต่างโปรแกรมไม่ค้าง (Non-blocking GUI) ขณะรอดาวน์โหลดไฟล์ขนาดใหญ่หรือรอเชื่อมต่อ Network
-2. **ระบบ Auto Pull & Cooldown Loop:**
-   - ใช้ `self.after(interval_ms, ...)` ของ Tkinter เพื่อรันงานตามรอบเวลาโดยไม่บล็อก Event Loop
-   - ฟังก์ชัน `update_cooldown_ui` คำนวณเวลาที่เหลือเป็นวินาทีและอัปเดตข้อความ `Next Auto Pull in: MM:SS` ทุก ๆ 1 วินาที
-   - เมื่อผู้ใช้กดปุ่ม Download All ด้วยตนเอง ตัวจับเวลาจะถูกรีเซ็ตใหม่ทันทีเพื่อป้องกันการดาวน์โหลดซ้ำซ้อน
-3. **การ Bundle ทรัพยากรสำหรับ Executable:**
-   - ฟังก์ชัน `resource_path()` รองรับการอ่านรูปไอคอนจากโฟลเดอร์ชั่วคราว `sys._MEIPASS` ของ Nuitka/PyInstaller
-
----
-
-## 5. การติดตั้ง พัฒนา และคอมไพล์โปรแกรม (Build & Compilation Guide)
-
-### 5.1 สภาพแวดล้อม (Environment)
-- พัฒนาบน **Python 3.9** (แนะนำเวอร์ชัน 3.9-3.11 เพื่อความเสถียรสูงสุดของ Nuitka และ Tkinter)
-- มี Virtual Environment ติดตั้งไว้แล้วที่โฟลเดอร์ `venv`
-
-### 5.2 ไลบรารีที่จำเป็น (`requirements.txt`)
-```text
-customtkinter==5.2.2
-imageio
-```
-
-### 5.3 การคอมไพล์เป็นไฟล์ .exe (Nuitka Build)
-ไฟล์ `build.bat` และ `build_quick.bat` ได้เตรียมคำสั่งสำหรับแพ็กเกจโปรแกรมไว้ดังนี้:
-```bat
-python -m nuitka --onefile ^
-  --output-filename=FTP_Control.exe ^
-  --enable-plugin=tk-inter ^
-  --include-data-dir=venv\Lib\site-packages\customtkinter=customtkinter ^
-  --windows-console-mode=disable ^
-  --windows-icon-from-ico=app_icon.ico ^
-  --include-data-files=app_icon.png=app_icon.png ^
-  main.py
-```
-- `--onefile`: รวบรวมโปรแกรมทั้งหมดให้อยู่ในไฟล์ `.exe` เพียงไฟล์เดียว
-- `--enable-plugin=tk-inter`: ดึงเอาชุด Tcl/Tk สำหรับ CustomTkinter มาใส่ในตัว build
-- `--include-data-dir=...`: แนบไฟล์ assets ของ customtkinter (json themes, icons) เข้าไปด้วย
-- `--windows-console-mode=disable`: ซ่อนหน้าต่าง CMD สีดำตอนเปิดโปรแกรม
-- `--windows-icon-from-ico=app_icon.ico`: กำหนดไอคอนให้ไฟล์ exe บน Windows
-
----
-
-## 6. ข้อแนะนำและแนวทางการพัฒนาต่อยอด (Future Improvements)
-
-1. **การตั้งค่าชื่อเครื่องจักรแบบ Dynamic (Custom Machine Name Mapping):**
-   - ปัจจุบันชื่อ `MC1 Connector Leak`, `MC2 Final And Resistance`, `MC3 Auto Appearance` ถูกกำหนดไว้แบบค่าคงที่ใน `ftp_client.py` (บรรทัดที่ 107-111)
-   - *ข้อเสนอแนะ:* สามารถปรับปรุงให้ผู้ใช้งานสามารถตั้งชื่อโฟลเดอร์ของแต่ละ Directory ได้โดยตรงจากหน้าต่าง PLC Manager
-2. **ระบบป้องกันการดาวน์โหลดไฟล์ซ้ำ (Incremental Download / Hash / Timestamp Check):**
-   - ปัจจุบันโปรแกรมจะโหลดไฟล์ทั้งหมดที่ตรงตามนามสกุลมาเขียนทับไฟล์เดิม
-   - *ข้อเสนอแนะ:* สามารถเพิ่มการตรวจสอบขนาดไฟล์หรือวันที่แก้ไข (Modification Time) เพื่อดาวน์โหลดเฉพาะไฟล์ที่เพิ่มใหม่หรือมีการเปลี่ยนแปลง
-3. **การบันทึก Log ลงไฟล์ภายนอก (Persistent File Logging):**
-   - เพิ่มการเขียนข้อความ log ลงในไฟล์ `app.log` หรือแยกตามวัน เพื่อให้ตรวจสอบย้อนหลังได้ในกรณีเกิดข้อผิดพลาดในการดึงข้อมูลยามค่ำคืน
-4. **ดาวน์โหลดแบบแยก Thread ตามเครื่อง PLC:**
-   - ปัจจุบันการกด Download All จะวนลูปสั่งดาวน์โหลดทีละ PLC ผ่าน UI button invoke
-   - *ข้อเสนอแนะ:* สามารถใช้ `ThreadPoolExecutor` เพื่อดาวน์โหลดหลายๆ PLC พร้อมกันได้อย่างอิสระ
+| รายการเดิม (v1.0.0) | ปรับปรุงใหม่ (v1.1.0) | ประโยชน์ที่ได้รับ |
+|---|---|---|
+| โค้ด UI ทั้งหมดรวมอยู่ใน `gui.py` ไฟล์เดียว 500 บรรทัด | แยกเป็นโมดูลย่อยใน `ui/views/` และ `ui/components/` | อ่านง่าย แยกความรับผิดชอบชัดเจน แก้ไขจุดใดไม่กระทบจุดอื่น |
+| ผู้ใช้พิมพ์ Path ผิดทำให้เกิด Error 550 (เช่น ใส่ `C:\...`) | มี `sanitize_remote_path()` แปลงและตัด Path อัตโนมัติ | ไม่เกิด Error 550 จากรูปแบบ Path อีกต่อไป |
+| ต้องเดาหรือจำชื่อโฟลเดอร์บน PLC | มีปุ่ม **📁 Browse FTP...** ให้คลิกเลือกโฟลเดอร์ได้โดยตรง | ใช้งานสะดวก รวดเร็ว แม่นยำ 100% |
+| Log หายเมื่อปิดโปรแกรม | มี `core/logger.py` บันทึกลง `logs/app.log` | ตรวจสอบข้อผิดพลาดหรือเหตุการณ์ย้อนหลังได้ |
+| ดาวน์โหลดไฟล์ซ้ำทุกครั้ง | มีการเช็คขนาดไฟล์ก่อนดาวน์โหลด | ประหยัดเวลาและ Bandwidth เครือข่าย |
