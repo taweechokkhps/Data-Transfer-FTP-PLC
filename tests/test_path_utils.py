@@ -5,7 +5,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from core.path_utils import sanitize_remote_path, format_local_save_dir
 
 def test_sanitize_remote_path():
-    assert sanitize_remote_path(r"C:\Users\user\Documents\TEST") == "/Users/user/Documents/TEST"
+    assert sanitize_remote_path(r"C:\Users\user\Documents\TEST") == "/Documents/TEST"
+    assert sanitize_remote_path(r"C:\Users\user\Documents\TEST", strip_user=False) == "/Users/user/Documents/TEST"
+    assert sanitize_remote_path("C:/Users/user/Documents/Projects/data_record/TEST/Data-TEST") == "/Documents/Projects/data_record/TEST/Data-TEST"
     assert sanitize_remote_path("D:/Data/Logs") == "/Data/Logs"
     assert sanitize_remote_path(r"\0_CARD\log0") == "/0_CARD/log0"
     assert sanitize_remote_path("0_CARD\\log0\\") == "/0_CARD/log0"

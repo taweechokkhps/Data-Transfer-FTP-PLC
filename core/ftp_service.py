@@ -26,7 +26,23 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         ftp = ftplib.FTP()
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
-        ftp.cwd(clean_dir)
+        
+        # Try clean_dir and candidate fallbacks
+        candidates = [clean_dir]
+        stripped = re.sub(r'^[/\\]Users[/\\][^/\\]+', '', clean_dir, flags=re.IGNORECASE)
+        if stripped and stripped != clean_dir:
+            candidates.insert(0, stripped)
+        cwd_ok = False
+        for c in candidates:
+            try:
+                ftp.cwd(c)
+                clean_dir = c
+                cwd_ok = True
+                break
+            except Exception:
+                pass
+        if not cwd_ok:
+            ftp.cwd(clean_dir)
         
         dir_names = []
         lines = []
@@ -126,10 +142,17 @@ class FTPDownloader:
 
     def _try_cwd(self, ftp, path: str) -> tuple[bool, str]:
         import re
-        candidates = [path]
-        stripped = re.sub(r'^/Users/[^/]+', '', path)
+        candidates = []
+        stripped = re.sub(r'^[/\\]Users[/\\][^/\\]+', '', path, flags=re.IGNORECASE)
         if stripped and stripped != path:
             candidates.append(stripped)
+        candidates.append(path)
+        
+        # Add relative versions (without leading slash)
+        for c in list(candidates):
+            rel = c.lstrip('/')
+            if rel and rel not in candidates:
+                candidates.append(rel)
         
         for cand in candidates:
             try:

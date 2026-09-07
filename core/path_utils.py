@@ -2,10 +2,11 @@ import re
 import datetime
 from pathlib import Path
 
-def sanitize_remote_path(path_str: str) -> str:
+def sanitize_remote_path(path_str: str, strip_user: bool = True) -> str:
     """
     Sanitize remote path for FTP navigation:
     - Strips leading/trailing whitespace
+    - If strip_user=True, strips Windows drive + /Users/<username> (e.g. C:/Users/user -> /)
     - Strips Windows drive letter (e.g. C:, D:)
     - Replaces backslashes with forward slashes
     - Collapses multiple slashes into single slash
@@ -15,6 +16,12 @@ def sanitize_remote_path(path_str: str) -> str:
         return "/"
     
     cleaned = path_str.strip()
+    if strip_user:
+        # Matches C:/Users/<user> or C:\Users\<user>
+        cleaned = re.sub(r'^[a-zA-Z]:[/\\]Users[/\\][^/\\]+', '', cleaned, flags=re.IGNORECASE)
+        # Also matches /Users/<user> or \Users\<user> without drive letter
+        cleaned = re.sub(r'^[/\\]Users[/\\][^/\\]+', '', cleaned, flags=re.IGNORECASE)
+
     # Strip Windows drive letter like C: or c:
     cleaned = re.sub(r'^[a-zA-Z]:', '', cleaned)
     # Convert backslashes to forward slashes

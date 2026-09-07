@@ -1,6 +1,6 @@
 {
     "global_settings": {
-        "target_directory": "",
+        "target_directory": "C:/Users/user/Desktop/PLC_Downloads",
         "file_extensions": [
             ".txt",
             ".csv"
@@ -15,11 +15,10 @@
             "port": 21,
             "username": "user",
             "password": "156900",
-            "remote_directory": "/Documents/Projects/data_record/TEST/Data-TEST",
             "machines": [
                 {
                     "name": "MC1 Connector Leak",
-                    "remote_dir": "/Documents/Projects/data_record/TEST/Data-TEST"
+                    "remote_dir": "C:/Users/user/Documents/Projects/data_record/TEST/Data-TEST"
                 }
             ]
         }

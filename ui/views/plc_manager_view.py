@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import filedialog
 import threading
 from core.ftp_service import test_connection
+from core.path_utils import sanitize_remote_path
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
 
 class PLCManagerView(ctk.CTkFrame):
@@ -173,8 +174,9 @@ class PLCManagerView(ctk.CTkFrame):
             def browse_for_this_row():
                 dir_name = filedialog.askdirectory(title=f"Select Directory for {name_ent.get() or 'Machine'}")
                 if dir_name:
+                    cleaned = sanitize_remote_path(dir_name)
                     dir_ent.delete(0, "end")
-                    dir_ent.insert(0, dir_name)
+                    dir_ent.insert(0, cleaned)
 
             btn_browse_m = ctk.CTkButton(row_frame, text="Browse", width=75, command=browse_for_this_row)
             btn_browse_m.pack(side="left", padx=5, pady=5)
@@ -219,7 +221,7 @@ class PLCManagerView(ctk.CTkFrame):
                 m_n = r["name_entry"].get().strip()
                 m_d = r["dir_entry"].get().strip()
                 if m_n and m_d:
-                    collected_machines.append({"name": m_n, "remote_dir": m_d})
+                    collected_machines.append({"name": m_n, "remote_dir": sanitize_remote_path(m_d)})
                     
             if not collected_machines:
                 collected_machines.append({"name": "MC1", "remote_dir": "/"})

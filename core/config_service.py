@@ -1,11 +1,14 @@
 import json
 import os
+from pathlib import Path
 
 CONFIG_FILE = "config.json"
 
+DEFAULT_TARGET_DIR = str(Path.home() / "Desktop" / "PLC_Downloads").replace("\\", "/")
+
 DEFAULT_CONFIG = {
     "global_settings": {
-        "target_directory": "",
+        "target_directory": DEFAULT_TARGET_DIR,
         "file_extensions": [".txt", ".csv"],
         "separate_by_date": False,
         "auto_pull_interval_minutes": 60
@@ -45,6 +48,13 @@ class ConfigManager:
                         plc["machines"] = machines
                         needs_save = True
                 
+                # Ensure target_directory has a default if empty
+                if not data.get("global_settings", {}).get("target_directory", "").strip():
+                    if "global_settings" not in data:
+                        data["global_settings"] = {}
+                    data["global_settings"]["target_directory"] = DEFAULT_TARGET_DIR
+                    needs_save = True
+
                 if needs_save:
                     self.config = data
                     self.save_config()
