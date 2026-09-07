@@ -83,9 +83,19 @@ class DashboardView(ctk.CTkFrame):
             small_btn.pack(side="left", padx=5, pady=10)
             ToolTip(small_btn, "Test Connection")
             
-            pb = ctk.CTkProgressBar(frame, width=150)
+            # Date filter badge
+            df = plc.get("date_filter", {})
+            if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
+                df_badge = f"📅 {df['start_date']} - {df['end_date']}"
+            else:
+                df_badge = "📅 All Files"
+            badge_lbl = ctk.CTkLabel(frame, text=df_badge, font=ctk.CTkFont(size=11, weight="bold"),
+                                     fg_color=("#E1BEE7", "#4A148C"), corner_radius=6, padx=8, pady=2)
+            badge_lbl.pack(side="left", padx=8, pady=10)
+
+            pb = ctk.CTkProgressBar(frame, width=130)
             pb.set(0)
-            pb.pack(side="left", padx=20, pady=10)
+            pb.pack(side="left", padx=15, pady=10)
             
             status = ctk.CTkLabel(frame, text="Ready")
             status.pack(side="left", padx=10, pady=10)
@@ -132,7 +142,8 @@ class DashboardView(ctk.CTkFrame):
             local_target_dir=target_dir,
             file_extensions=g_settings.get("file_extensions", [".csv", ".txt"]),
             separate_by_date=g_settings.get("separate_by_date", True),
-            plc_name=plc_data['name']
+            plc_name=plc_data['name'],
+            date_filter=plc_data.get("date_filter")
         )
 
         def update_progress(current, total):
