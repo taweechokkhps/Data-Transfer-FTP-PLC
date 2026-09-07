@@ -1,12 +1,11 @@
 {
     "global_settings": {
-        "target_directory": "C:/Users/user/Desktop/PLC_Downloads",
+        "target_directory": "C:/Users/user/Documents/Projects/data_record/TEST/RESULTS",
         "file_extensions": [
-            ".txt",
-            ".csv"
+            ".txt"
         ],
         "separate_by_date": false,
-        "auto_pull_interval_minutes": 60
+        "auto_pull_interval_minutes": 0
     },
     "plcs": [
         {
@@ -18,7 +17,7 @@
             "machines": [
                 {
                     "name": "MC1 Connector Leak",
-                    "remote_dir": "C:/Users/user/Documents/Projects/data_record/TEST/Data-TEST"
+                    "remote_dir": "/Documents/Projects/data_record/TEST/Data-TEST"
                 }
             ]
         }

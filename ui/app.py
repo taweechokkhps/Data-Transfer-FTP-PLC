@@ -65,10 +65,18 @@ class App(ctk.CTk):
         self.btn_settings = ctk.CTkButton(self.sidebar_frame, text="Settings", command=self.show_settings)
         self.btn_settings.grid(row=3, column=0, padx=20, pady=10)
 
+        # Shared target directory variable across Overview and Settings
+        from pathlib import Path
+        init_target = self.config_manager.get().get("global_settings", {}).get("target_directory", "")
+        if not init_target:
+            init_target = str(Path.home() / "Desktop" / "PLC_Downloads").replace("\\", "/")
+            self.config_manager.update_global_settings({"target_directory": init_target})
+        self.target_dir_var = ctk.StringVar(value=init_target)
+
         # Views
-        self.dashboard_view = DashboardView(self, self.config_manager, request_timer_reset_cb=self.start_auto_pull_timer)
+        self.dashboard_view = DashboardView(self, self.config_manager, target_dir_var=self.target_dir_var, request_timer_reset_cb=self.start_auto_pull_timer)
         self.plc_manager_view = PLCManagerView(self, self.config_manager, on_plc_list_updated=self.dashboard_view.refresh_plcs)
-        self.settings_view = SettingsView(self, self.config_manager, on_settings_changed=self.on_settings_saved)
+        self.settings_view = SettingsView(self, self.config_manager, target_dir_var=self.target_dir_var, on_settings_changed=self.on_settings_saved)
 
         self.show_dashboard()
 
@@ -91,6 +99,9 @@ class App(ctk.CTk):
 
     def show_dashboard(self):
         self.select_view(self.dashboard_view)
+        curr = self.config_manager.get()["global_settings"].get("target_directory", "")
+        if curr and self.target_dir_var.get() != curr:
+            self.target_dir_var.set(curr)
         self.dashboard_view.refresh_plcs()
 
     def show_plc_manager(self):
@@ -99,9 +110,15 @@ class App(ctk.CTk):
 
     def show_settings(self):
         self.select_view(self.settings_view)
+        curr = self.config_manager.get()["global_settings"].get("target_directory", "")
+        if curr and self.target_dir_var.get() != curr:
+            self.target_dir_var.set(curr)
 
     def on_settings_saved(self):
         self.start_auto_pull_timer()
+        curr = self.config_manager.get()["global_settings"].get("target_directory", "")
+        if curr:
+            self.target_dir_var.set(curr)
 
     def start_auto_pull_timer(self):
         if self.auto_pull_job is not None:

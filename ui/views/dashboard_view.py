@@ -8,9 +8,10 @@ from ui.components.tooltip import ToolTip
 from ui.components.log_console import LogConsole
 
 class DashboardView(ctk.CTkFrame):
-    def __init__(self, master, config_manager, request_timer_reset_cb=None, **kwargs):
+    def __init__(self, master, config_manager, target_dir_var=None, request_timer_reset_cb=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.config_manager = config_manager
+        self.target_dir_var = target_dir_var
         self.request_timer_reset_cb = request_timer_reset_cb
         
         self.grid_columnconfigure(0, weight=1)
@@ -19,20 +20,22 @@ class DashboardView(ctk.CTkFrame):
         header = ctk.CTkLabel(self, text="Download Overview", font=ctk.CTkFont(size=24, weight="bold"))
         header.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="w")
         
-        # Target Save Directory Bar
+        # Target Save Directory Bar (Shared identical with Settings)
         dest_card = ctk.CTkFrame(self, corner_radius=8)
         dest_card.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
         
-        ctk.CTkLabel(dest_card, text="📁 Save Target:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(12, 8), pady=8)
+        ctk.CTkLabel(dest_card, text="📁 Target Save Directory (โฟลเดอร์ปลายทาง):", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(12, 8), pady=8)
         
-        init_target = self.config_manager.get().get("global_settings", {}).get("target_directory", "")
-        if not init_target:
-            init_target = str(Path.home() / "Desktop" / "PLC_Downloads").replace("\\", "/")
-            self.config_manager.update_global_settings({"target_directory": init_target})
+        if self.target_dir_var is None:
+            init_target = self.config_manager.get().get("global_settings", {}).get("target_directory", "")
+            if not init_target:
+                init_target = str(Path.home() / "Desktop" / "PLC_Downloads").replace("\\", "/")
+                self.config_manager.update_global_settings({"target_directory": init_target})
+            self.target_dir_var = ctk.StringVar(value=init_target)
             
-        self.target_dir_var = ctk.StringVar(value=init_target)
-        self.target_dir_entry = ctk.CTkEntry(dest_card, textvariable=self.target_dir_var, height=30)
+        self.target_dir_entry = ctk.CTkEntry(dest_card, textvariable=self.target_dir_var, height=30, placeholder_text="e.g. C:/PLC_Logs or D:/Production_Data")
         self.target_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=8)
+        self.target_dir_entry.bind("<FocusOut>", lambda e: self.config_manager.update_global_settings({"target_directory": self.target_dir_var.get().strip()}))
         
         btn_browse_dest = ctk.CTkButton(dest_card, text="Browse...", width=80, height=30, font=ctk.CTkFont(weight="bold"), command=self.browse_dest_dir)
         btn_browse_dest.pack(side="right", padx=(0, 12), pady=8)

@@ -2,9 +2,10 @@ import customtkinter as ctk
 from tkinter import filedialog
 
 class SettingsView(ctk.CTkFrame):
-    def __init__(self, master, config_manager, on_settings_changed=None, **kwargs):
+    def __init__(self, master, config_manager, target_dir_var=None, on_settings_changed=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.config_manager = config_manager
+        self.target_dir_var = target_dir_var
         self.on_settings_changed = on_settings_changed
         self.config = self.config_manager.get()
         self.build_view()
@@ -35,9 +36,11 @@ class SettingsView(ctk.CTkFrame):
         dir_input_row = ctk.CTkFrame(card_dir, fg_color="transparent")
         dir_input_row.pack(fill="x", padx=18, pady=(0, 16))
         
-        self.target_dir_var = ctk.StringVar(value=self.config["global_settings"].get("target_directory", ""))
+        if self.target_dir_var is None:
+            self.target_dir_var = ctk.StringVar(value=self.config["global_settings"].get("target_directory", ""))
         self.target_dir_entry = ctk.CTkEntry(dir_input_row, textvariable=self.target_dir_var, height=34, placeholder_text="e.g. C:/PLC_Logs or D:/Production_Data")
         self.target_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 12))
+        self.target_dir_entry.bind("<FocusOut>", lambda e: self.config_manager.update_global_settings({"target_directory": self.target_dir_var.get().strip()}))
         
         btn_browse = ctk.CTkButton(dir_input_row, text="Browse...", width=95, height=34, font=ctk.CTkFont(weight="bold"), command=self.browse_target_dir)
         btn_browse.pack(side="right")
@@ -152,6 +155,7 @@ class SettingsView(ctk.CTkFrame):
         dir_name = filedialog.askdirectory(title="Select Target Save Directory")
         if dir_name:
             self.target_dir_var.set(dir_name)
+            self.config_manager.update_global_settings({"target_directory": dir_name})
 
     def save_settings(self):
         exts = self.get_selected_extensions()
