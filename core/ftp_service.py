@@ -1,9 +1,10 @@
 import ftplib
 import os
 import io
+import datetime
 from pathlib import Path
 from contextlib import redirect_stdout
-from core.path_utils import sanitize_remote_path, format_local_save_dir
+from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir
 from core.logger import logger
 
 def test_connection(host: str, port: int, username: str, password: str, timeout: int = 5) -> tuple[bool, str]:
@@ -85,11 +86,12 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         return False, f"Failed to list directory: {e}"
 
 class FTPDownloader:
-    def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name):
+    def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name, date_filter=None):
         self.host = host
         self.port = int(port)
         self.username = username
         self.password = password
+        self.date_filter = date_filter or {"mode": "all"}
 
         # Support both machine list of dicts [{'name': '...', 'remote_dir': '...'}] and legacy remote_dirs list of str
         self.machines = []
@@ -176,6 +178,22 @@ class FTPDownloader:
             return False
 
         try:
+            mode = self.date_filter.get("mode", "all")
+            start_str = self.date_filter.get("start_date", "").strip()
+            end_str = self.date_filter.get("end_date", "").strip()
+
+            start_date = None
+            end_date = None
+            if mode == "range" and start_str and end_str:
+                try:
+                    start_date = datetime.datetime.strptime(start_str, "%d/%m/%Y").date()
+                    end_date = datetime.datetime.strptime(end_str, "%d/%m/%Y").date()
+                    if start_date > end_date:
+                        start_date, end_date = end_date, start_date
+                except Exception as e:
+                    if log_callback:
+                        log_callback(f"[{self.plc_name}] Invalid date format ({start_str} - {end_str}): {e}")
+
             files_by_machine = {}
             total_target_files = []
             for m in self.machines:
@@ -189,8 +207,31 @@ class FTPDownloader:
                     continue
                 try:
                     files = self.ftp.nlst()
-                    t_files = [f for f in files if any(f.lower().endswith(ext) for ext in self.file_extensions)]
-                    files_by_machine[m["name"]] = (actual_dir, t_files)
+                    candidate_files = [f for f in files if any(f.lower().endswith(ext) for ext in self.file_extensions)]
+                    
+                    t_files = []
+                    file_dates = []
+                    for f in candidate_files:
+                        f_date = parse_date_from_filename(f)
+                        if f_date:
+                            file_dates.append(f_date)
+                        if mode == "range" and start_date and end_date:
+                            if f_date and start_date <= f_date <= end_date:
+                                t_files.append(f)
+                        else:
+                            t_files.append(f)
+
+                    # Determine batch folder name
+                    if mode == "range" and start_date and end_date:
+                        batch_folder_name = f"({start_date.strftime('%d-%m-%Y')} - {end_date.strftime('%d-%m-%Y')})"
+                    elif file_dates:
+                        min_d = min(file_dates)
+                        max_d = max(file_dates)
+                        batch_folder_name = f"({min_d.strftime('%d-%m-%Y')} - {max_d.strftime('%d-%m-%Y')}) ALL"
+                    else:
+                        batch_folder_name = "(ALL_FILES)"
+
+                    files_by_machine[m["name"]] = (actual_dir, t_files, batch_folder_name)
                     total_target_files.extend(t_files)
                 except Exception as e:
                     if log_callback:
@@ -198,7 +239,10 @@ class FTPDownloader:
 
             if not total_target_files:
                 if log_callback:
-                    log_callback(f"[{self.plc_name}] No matching files found in any machine directory.")
+                    if mode == "range" and start_date and end_date:
+                        log_callback(f"[{self.plc_name}] No matching files found in date range {start_str} - {end_str}.")
+                    else:
+                        log_callback(f"[{self.plc_name}] No matching files found in any machine directory.")
                 self.disconnect()
                 self.is_running = False
                 return True
@@ -206,10 +250,10 @@ class FTPDownloader:
             total_files = len(total_target_files)
             current_index = 0
 
-            for m_name, (r_dir, t_files) in files_by_machine.items():
+            for m_name, (r_dir, t_files, batch_folder_name) in files_by_machine.items():
                 if not self.is_running:
                     break
-                save_dir = format_local_save_dir(self.local_target_dir, self.plc_name, m_name, self.separate_by_date)
+                save_dir = format_batch_save_dir(self.local_target_dir, self.plc_name, m_name, batch_folder_name)
 
                 ok, _ = self._try_cwd(self.ftp, r_dir)
                 if not ok:
