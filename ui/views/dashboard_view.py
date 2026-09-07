@@ -218,7 +218,7 @@ class DashboardView(ctk.CTkFrame):
                 is_running[0] = False
                 elapsed = time.time() - start_time
                 mins, secs = divmod(int(elapsed), 60)
-                time_str = f"{mins:02d}:{secs:02d}"
+                time_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.2f}s"
                 self.after(0, lambda: status_label.configure(text="Finished"))
                 if timer_label:
                     self.after(0, lambda: timer_label.configure(text=f"⏱ {time_str}", text_color="#00E676"))

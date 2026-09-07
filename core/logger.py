@@ -1,4 +1,5 @@
 import time
+import datetime
 import os
 from pathlib import Path
 import logging
@@ -23,7 +24,7 @@ class AppLogger:
         self.file_logger.setLevel(logging.INFO)
         if not self.file_logger.handlers:
             handler = RotatingFileHandler(str(log_file), maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
-            formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+            formatter = logging.Formatter("[%(asctime)s.%(msecs)03d] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
             handler.setFormatter(formatter)
             self.file_logger.addHandler(handler)
 
@@ -36,7 +37,8 @@ class AppLogger:
             self.callbacks.remove(callback)
 
     def log(self, message: str, level: str = "info"):
-        timestamp = time.strftime("%H:%M:%S")
+        now = datetime.datetime.now()
+        timestamp = now.strftime("%H:%M:%S.%f")[:-3]
         formatted_ui = f"[{timestamp}] {message}"
         
         lower = level.lower() if level else "info"

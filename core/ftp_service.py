@@ -337,10 +337,13 @@ class FTPDownloader:
                         pass
 
                     try:
+                        f_start = time.perf_counter()
                         with open(local_filepath, 'wb') as f:
-                            if log_callback:
-                                log_callback(f"[{self.plc_name}][{m_name}] Downloading {pure_filename}...")
                             self._safe_retrbinary(f"RETR {filename}", f.write, log_callback=log_callback)
+                        f_dur_ms = (time.perf_counter() - f_start) * 1000
+                        f_size_kb = local_filepath.stat().st_size / 1024
+                        if log_callback:
+                            log_callback(f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms")
                         current_index += 1
                         if progress_callback:
                             progress_callback(current_index, total_files)
@@ -349,8 +352,12 @@ class FTPDownloader:
                             log_callback(f"[{self.plc_name}][{m_name}] Error downloading {filename}: {e}")
 
             elapsed = time.time() - start_time
+            total_ms = elapsed * 1000
             mins, secs = divmod(int(elapsed), 60)
-            dur_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.1f}s"
+            if mins > 0:
+                dur_str = f"{mins:02d}:{secs:02d} ({total_ms:,.0f} ms)"
+            else:
+                dur_str = f"{elapsed:.3f}s ({total_ms:,.0f} ms)"
             if log_callback:
                 log_callback(f"[{self.plc_name}] Download process completed in {dur_str} ({current_index}/{total_files} files).")
         except Exception as e:
