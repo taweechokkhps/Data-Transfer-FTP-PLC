@@ -124,6 +124,25 @@ class FTPDownloader:
                     pass
             self.ftp = None
 
+    def _try_cwd(self, ftp, path: str) -> tuple[bool, str]:
+        import re
+        candidates = [path]
+        stripped = re.sub(r'^/Users/[^/]+', '', path)
+        if stripped and stripped != path:
+            candidates.append(stripped)
+        
+        for cand in candidates:
+            try:
+                ftp.cwd(cand)
+                return True, cand
+            except Exception:
+                pass
+        try:
+            ftp.cwd(path)
+            return True, path
+        except Exception as e:
+            return False, str(e)
+
     def download_files(self, progress_callback=None, log_callback=None) -> bool:
         self.is_running = True
         success, msg = self.connect(log_callback)
@@ -140,15 +159,19 @@ class FTPDownloader:
                 if not self.is_running:
                     break
                 r_dir = m["remote_dir"]
+                ok, actual_dir = self._try_cwd(self.ftp, r_dir)
+                if not ok:
+                    if log_callback:
+                        log_callback(f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {actual_dir}")
+                    continue
                 try:
-                    self.ftp.cwd(r_dir)
                     files = self.ftp.nlst()
                     t_files = [f for f in files if any(f.lower().endswith(ext) for ext in self.file_extensions)]
-                    files_by_machine[m["name"]] = (r_dir, t_files)
+                    files_by_machine[m["name"]] = (actual_dir, t_files)
                     total_target_files.extend(t_files)
                 except Exception as e:
                     if log_callback:
-                        log_callback(f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {e}")
+                        log_callback(f"[{self.plc_name}] Error listing {m['name']} ({actual_dir}): {e}")
 
             if not total_target_files:
                 if log_callback:
@@ -165,9 +188,8 @@ class FTPDownloader:
                     break
                 save_dir = format_local_save_dir(self.local_target_dir, self.plc_name, m_name, self.separate_by_date)
 
-                try:
-                    self.ftp.cwd(r_dir)
-                except Exception:
+                ok, _ = self._try_cwd(self.ftp, r_dir)
+                if not ok:
                     continue
 
                 for filename in t_files:

@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from tkinter import filedialog
 import threading
 from core.ftp_service import test_connection
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
@@ -168,24 +169,14 @@ class PLCManagerView(ctk.CTkFrame):
             dir_ent.insert(0, remote_dir if remote_dir else "/")
             dir_ent.pack(side="left", fill="x", expand=True, padx=5, pady=5)
             
-            # Browse button for this specific machine
+            # Browse button for this specific machine (like Settings)
             def browse_for_this_row():
-                h = host_entry.get().strip()
-                p = int(port_entry.get() if port_entry.get().isdigit() else 21)
-                u = user_entry.get().strip()
-                pw = pass_entry.get().strip()
-                if not h:
-                    test_status_lbl.configure(text="Please enter Host/IP first.", text_color="#FF5252")
-                    return
-                
-                def on_selected(chosen_dir):
+                dir_name = filedialog.askdirectory(title=f"Select Directory for {name_ent.get() or 'Machine'}")
+                if dir_name:
                     dir_ent.delete(0, "end")
-                    dir_ent.insert(0, chosen_dir)
-                
-                init_d = dir_ent.get().strip() or "/"
-                FTPBrowserDialog(dialog, h, p, u, pw, initial_dir=init_d, on_select_callback=on_selected)
+                    dir_ent.insert(0, dir_name)
 
-            btn_browse_m = ctk.CTkButton(row_frame, text="📁 Browse", width=75, command=browse_for_this_row)
+            btn_browse_m = ctk.CTkButton(row_frame, text="Browse", width=75, command=browse_for_this_row)
             btn_browse_m.pack(side="left", padx=5, pady=5)
             
             # Delete button
