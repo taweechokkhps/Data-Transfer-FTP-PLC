@@ -135,7 +135,13 @@ class DashboardView(ctk.CTkFrame):
     def test_single_connection(self, plc_data, status_label):
         def run():
             status_label.configure(text="Testing...")
-            ok, msg = test_connection(plc_data['host'], int(plc_data.get('port', 21)), plc_data['username'], plc_data['password'])
+            ok, msg = test_connection(
+                plc_data['host'],
+                int(plc_data.get('port', 21)),
+                plc_data['username'],
+                plc_data['password'],
+                ftp_mode=plc_data.get('ftp_mode', 'auto')
+            )
             if ok:
                 status_label.configure(text="Conn OK")
                 logger.success(f"[{plc_data['name']}] Connection Test: Success")
@@ -169,7 +175,8 @@ class DashboardView(ctk.CTkFrame):
             file_extensions=g_settings.get("file_extensions", [".csv", ".txt"]),
             separate_by_date=g_settings.get("separate_by_date", True),
             plc_name=plc_data['name'],
-            date_filter=plc_data.get("date_filter")
+            date_filter=plc_data.get("date_filter"),
+            ftp_mode=plc_data.get("ftp_mode", "auto")
         )
 
         def update_progress(current, total):

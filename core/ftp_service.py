@@ -7,12 +7,14 @@ from contextlib import redirect_stdout
 from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir
 from core.logger import logger
 
-def test_connection(host: str, port: int, username: str, password: str, timeout: int = 5) -> tuple[bool, str]:
+def test_connection(host: str, port: int, username: str, password: str, timeout: int = 5, ftp_mode: str = "auto") -> tuple[bool, str]:
     """Test FTP connection and login."""
     try:
         ftp = ftplib.FTP()
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
+        if ftp_mode == "active":
+            ftp.set_pasv(False)
         ftp.quit()
         return True, "Connected successfully."
     except Exception as e:
@@ -20,13 +22,15 @@ def test_connection(host: str, port: int, username: str, password: str, timeout:
             return False, "530 Not logged in (Username or Password incorrect)."
         return False, str(e)
 
-def list_remote_directories(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 10) -> tuple[bool, list[str] | str]:
+def list_remote_directories(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 10, ftp_mode: str = "auto") -> tuple[bool, list[str] | str]:
     """List subdirectories in current_dir on remote FTP server."""
     clean_dir = sanitize_remote_path(current_dir)
     try:
         ftp = ftplib.FTP()
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
+        if ftp_mode == "active":
+            ftp.set_pasv(False)
         
         # Try clean_dir and candidate fallbacks
         candidates = [clean_dir]
@@ -47,7 +51,15 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         
         dir_names = []
         lines = []
-        ftp.dir(lines.append)
+        try:
+            ftp.dir(lines.append)
+        except Exception as e:
+            if "502" in str(e) or "PASV" in str(e).upper():
+                ftp.set_pasv(False)
+                lines.clear()
+                ftp.dir(lines.append)
+            else:
+                raise
         
         for line in lines:
             parts = line.split()
@@ -68,7 +80,16 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         # Fallback: if dir parsing found nothing, try checking nlst items
         if not dir_names:
             try:
-                for item in ftp.nlst():
+                try:
+                    nlst_items = ftp.nlst()
+                except Exception as e:
+                    if "502" in str(e) or "PASV" in str(e).upper():
+                        ftp.set_pasv(False)
+                        nlst_items = ftp.nlst()
+                    else:
+                        raise
+
+                for item in nlst_items:
                     if item in [".", ".."]:
                         continue
                     try:
@@ -86,12 +107,14 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         return False, f"Failed to list directory: {e}"
 
 class FTPDownloader:
-    def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name, date_filter=None):
+    def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name, date_filter=None, ftp_mode="auto"):
         self.host = host
         self.port = int(port)
         self.username = username
         self.password = password
         self.date_filter = date_filter or {"mode": "all"}
+        self.ftp_mode = (ftp_mode or "auto").lower()
+        self.is_active_mode = (self.ftp_mode == "active")
 
         # Support both machine list of dicts [{'name': '...', 'remote_dir': '...'}] and legacy remote_dirs list of str
         self.machines = []
@@ -121,6 +144,8 @@ class FTPDownloader:
             with redirect_stdout(debug_output):
                 self.ftp.connect(self.host, self.port, timeout=10)
                 self.ftp.login(self.username, self.password)
+                if self.is_active_mode or self.ftp_mode == "active":
+                    self.ftp.set_pasv(False)
             self.ftp.set_debuglevel(0)
             return True, "Connected successfully."
         except Exception as e:
@@ -130,6 +155,36 @@ class FTPDownloader:
             if '530' in str(e):
                 return False, f"Connection failed: 530 Not logged in. (Username or Password incorrect)"
             return False, f"Connection failed: {e}"
+
+    def _safe_nlst(self, log_callback=None) -> list[str]:
+        """Runs nlst with automatic fallback to Active (PORT) mode on 502 error."""
+        try:
+            return self.ftp.nlst()
+        except Exception as e:
+            err_str = str(e)
+            if "502" in err_str or "PASV" in err_str.upper():
+                if log_callback:
+                    log_callback(f"[{self.plc_name}] Notice: 502 PASV not implemented by PLC. Automatically switching to Active (PORT) mode.")
+                logger.info(f"[{self.plc_name}] Switching to Active (PORT) mode due to 502 PASV error.")
+                self.ftp.set_pasv(False)
+                self.is_active_mode = True
+                return self.ftp.nlst()
+            raise
+
+    def _safe_retrbinary(self, cmd: str, callback, log_callback=None):
+        """Runs retrbinary with automatic fallback to Active (PORT) mode on 502 error."""
+        try:
+            return self.ftp.retrbinary(cmd, callback)
+        except Exception as e:
+            err_str = str(e)
+            if "502" in err_str or "PASV" in err_str.upper():
+                if log_callback:
+                    log_callback(f"[{self.plc_name}] Notice: 502 PASV not implemented by PLC. Automatically switching to Active (PORT) mode.")
+                logger.info(f"[{self.plc_name}] Switching to Active (PORT) mode due to 502 PASV error.")
+                self.ftp.set_pasv(False)
+                self.is_active_mode = True
+                return self.ftp.retrbinary(cmd, callback)
+            raise
 
     def disconnect(self):
         if self.ftp:
@@ -206,7 +261,7 @@ class FTPDownloader:
                         log_callback(f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {actual_dir}")
                     continue
                 try:
-                    files = self.ftp.nlst()
+                    files = self._safe_nlst(log_callback=log_callback)
                     candidate_files = [f for f in files if any(f.lower().endswith(ext) for ext in self.file_extensions)]
                     
                     t_files = []
@@ -283,7 +338,7 @@ class FTPDownloader:
                         with open(local_filepath, 'wb') as f:
                             if log_callback:
                                 log_callback(f"[{self.plc_name}][{m_name}] Downloading {pure_filename}...")
-                            self.ftp.retrbinary(f"RETR {filename}", f.write)
+                            self._safe_retrbinary(f"RETR {filename}", f.write, log_callback=log_callback)
                         current_index += 1
                         if progress_callback:
                             progress_callback(current_index, total_files)

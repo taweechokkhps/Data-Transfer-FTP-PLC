@@ -25,6 +25,24 @@
                 "start_date": "",
                 "end_date": ""
             }
+        },
+        {
+            "name": "LINE 1",
+            "host": "192.168.0.11",
+            "port": 21,
+            "username": "admin",
+            "password": "admin",
+            "machines": [
+                {
+                    "name": "MC1",
+                    "remote_dir": "/MEMCARD"
+                }
+            ],
+            "date_filter": {
+                "mode": "all",
+                "start_date": "",
+                "end_date": ""
+            }
         }
     ]
 }

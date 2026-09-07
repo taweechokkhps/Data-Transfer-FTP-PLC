@@ -124,15 +124,29 @@ class PLCManagerView(ctk.CTkFrame):
         user_entry.insert(0, plc_data.get("username", "ftp"))
         user_entry.grid(row=3, column=1, sticky="ew", pady=(0, 8))
         
+        mode_val_map = {
+            "Auto (Auto Fallback)": "auto",
+            "Active (PORT - แนะนำสำหรับ PLC)": "active",
+            "Passive (PASV)": "passive",
+        }
+        mode_inv_map = {
+            "auto": "Auto (Auto Fallback)",
+            "active": "Active (PORT - แนะนำสำหรับ PLC)",
+            "passive": "Passive (PASV)",
+        }
+        cur_ftp_mode = plc_data.get("ftp_mode", "auto")
+        ftp_mode_var = ctk.StringVar(value=mode_inv_map.get(cur_ftp_mode, "Auto (Auto Fallback)"))
+
         ctk.CTkLabel(conn_frame, text="FTP Password:").grid(row=4, column=0, sticky="w", pady=(0, 2))
         pass_entry = ctk.CTkEntry(conn_frame, width=260, show="*")
         pass_entry.insert(0, plc_data.get("password", ""))
         pass_entry.grid(row=5, column=0, sticky="ew", padx=(0, 10), pady=(0, 8))
         
+        ctk.CTkLabel(conn_frame, text="FTP Mode:").grid(row=4, column=1, sticky="w", pady=(0, 2))
+        ftp_mode_menu = ctk.CTkOptionMenu(conn_frame, values=list(mode_val_map.keys()), variable=ftp_mode_var)
+        ftp_mode_menu.grid(row=5, column=1, sticky="ew", pady=(0, 8))
+
         # Test Connection button
-        test_btn_frame = ctk.CTkFrame(conn_frame, fg_color="transparent")
-        test_btn_frame.grid(row=5, column=1, sticky="ew")
-        
         test_status_lbl = ctk.CTkLabel(dialog, text="", font=ctk.CTkFont(size=11))
         
         def do_test():
@@ -140,17 +154,18 @@ class PLCManagerView(ctk.CTkFrame):
             p = int(port_entry.get() if port_entry.get().isdigit() else 21)
             u = user_entry.get().strip()
             pw = pass_entry.get().strip()
+            m = mode_val_map.get(ftp_mode_var.get(), "auto")
             test_status_lbl.configure(text="Testing connection...", text_color="gray")
             def run():
-                ok, msg = test_connection(h, p, u, pw)
+                ok, msg = test_connection(h, p, u, pw, ftp_mode=m)
                 if ok:
                     dialog.after(0, lambda: test_status_lbl.configure(text="✓ Connection Successful!", text_color="#00E676"))
                 else:
                     dialog.after(0, lambda: test_status_lbl.configure(text=f"✗ {msg}", text_color="#FF5252"))
             threading.Thread(target=run, daemon=True).start()
 
-        btn_test = ctk.CTkButton(test_btn_frame, text="🔌 Test Connection", command=do_test)
-        btn_test.pack(side="left", fill="x", expand=True)
+        btn_test = ctk.CTkButton(conn_frame, text="🔌 Test Connection", command=do_test)
+        btn_test.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(4, 8))
         test_status_lbl.pack(padx=20, pady=(0, 5))
 
         # Machines Section
@@ -179,13 +194,25 @@ class PLCManagerView(ctk.CTkFrame):
             dir_ent.insert(0, remote_dir if remote_dir else "/")
             dir_ent.pack(side="left", fill="x", expand=True, padx=5, pady=5)
             
-            # Browse button for this specific machine (like Settings)
+            # Browse button for this specific machine
             def browse_for_this_row():
-                dir_name = filedialog.askdirectory(title=f"Select Directory for {name_ent.get() or 'Machine'}")
-                if dir_name:
-                    cleaned = sanitize_remote_path(dir_name)
-                    dir_ent.delete(0, "end")
-                    dir_ent.insert(0, cleaned)
+                h = host_entry.get().strip()
+                p = int(port_entry.get() if port_entry.get().isdigit() else 21)
+                u = user_entry.get().strip()
+                pw = pass_entry.get().strip()
+                m = mode_val_map.get(ftp_mode_var.get(), "auto")
+                init_d = dir_ent.get().strip() or "/"
+                if h:
+                    def on_dir_selected(sel):
+                        dir_ent.delete(0, "end")
+                        dir_ent.insert(0, sel)
+                    FTPBrowserDialog(dialog, h, p, u, pw, initial_dir=init_d, on_select_callback=on_dir_selected, ftp_mode=m)
+                else:
+                    dir_name = filedialog.askdirectory(title=f"Select Directory for {name_ent.get() or 'Machine'}")
+                    if dir_name:
+                        cleaned = sanitize_remote_path(dir_name)
+                        dir_ent.delete(0, "end")
+                        dir_ent.insert(0, cleaned)
 
             btn_browse_m = ctk.CTkButton(row_frame, text="Browse", width=75, command=browse_for_this_row)
             btn_browse_m.pack(side="left", padx=5, pady=5)
@@ -306,6 +333,7 @@ class PLCManagerView(ctk.CTkFrame):
                 "port": int(port_entry.get() if port_entry.get().isdigit() else 21),
                 "username": user_entry.get().strip(),
                 "password": pass_entry.get().strip(),
+                "ftp_mode": mode_val_map.get(ftp_mode_var.get(), "auto"),
                 "machines": collected_machines,
                 "date_filter": {
                     "mode": df_mode,

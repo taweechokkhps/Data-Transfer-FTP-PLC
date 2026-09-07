@@ -52,6 +52,11 @@ class ConfigManager:
                     if "date_filter" not in plc:
                         plc["date_filter"] = {"mode": "all", "start_date": "", "end_date": ""}
                         needs_save = True
+
+                    # Ensure ftp_mode exists
+                    if "ftp_mode" not in plc:
+                        plc["ftp_mode"] = "auto"
+                        needs_save = True
                 
                 # Ensure target_directory has a default if empty
                 if not data.get("global_settings", {}).get("target_directory", "").strip():

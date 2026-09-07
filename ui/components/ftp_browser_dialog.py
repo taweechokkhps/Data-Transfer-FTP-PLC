@@ -4,7 +4,7 @@ from core.ftp_service import list_remote_directories
 from core.path_utils import sanitize_remote_path
 
 class FTPBrowserDialog(ctk.CTkToplevel):
-    def __init__(self, parent, host, port, username, password, initial_dir="/", on_select_callback=None):
+    def __init__(self, parent, host, port, username, password, initial_dir="/", on_select_callback=None, ftp_mode="auto"):
         super().__init__(parent)
         self.title("📁 Browse Remote FTP Directories")
         self.geometry("520x480")
@@ -15,6 +15,7 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         self.port = port
         self.username = username
         self.password = password
+        self.ftp_mode = ftp_mode
         self.current_dir = sanitize_remote_path(initial_dir)
         self.on_select_callback = on_select_callback
 
@@ -58,7 +59,7 @@ class FTPBrowserDialog(ctk.CTkToplevel):
             w.destroy()
 
         def worker():
-            ok, res = list_remote_directories(self.host, self.port, self.username, self.password, target_dir)
+            ok, res = list_remote_directories(self.host, self.port, self.username, self.password, target_dir, ftp_mode=self.ftp_mode)
             if ok:
                 self.after(0, lambda: self._on_load_success(target_dir, res))
             else:
