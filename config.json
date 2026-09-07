@@ -19,7 +19,12 @@
                     "name": "MC1 Connector Leak",
                     "remote_dir": "/Documents/Projects/data_record/TEST/Data-TEST"
                 }
-            ]
+            ],
+            "date_filter": {
+                "mode": "all",
+                "start_date": "",
+                "end_date": ""
+            }
         }
     ]
 }
