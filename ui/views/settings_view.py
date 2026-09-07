@@ -19,9 +19,9 @@ class SettingsView(ctk.CTkFrame):
         ctk.CTkLabel(header_frame, text="Configure local storage, target file types, and automatic download schedules",
                      font=ctk.CTkFont(size=12), text_color="gray").pack(anchor="w", pady=(2, 0))
 
-        # Main Cards Container
-        cards_container = ctk.CTkFrame(self, fg_color="transparent")
-        cards_container.pack(fill="both", expand=True, padx=20, pady=0)
+        # Main Cards Container (Scrollable)
+        cards_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        cards_container.pack(fill="both", expand=True, padx=20, pady=(0, 10))
 
         # ==========================================
         # CARD 1: Target Save Directory
