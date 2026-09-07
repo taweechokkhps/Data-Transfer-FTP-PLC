@@ -6,6 +6,7 @@ from core.ftp_service import test_connection, FTPDownloader
 from core.logger import logger
 from ui.components.tooltip import ToolTip
 from ui.components.log_console import LogConsole
+from ui.components.date_picker import QuickDateFilterDialog
 
 class DashboardView(ctk.CTkFrame):
     def __init__(self, master, config_manager, target_dir_var=None, request_timer_reset_cb=None, **kwargs):
@@ -72,7 +73,7 @@ class DashboardView(ctk.CTkFrame):
             w.destroy()
             
         plcs = self.config_manager.get().get("plcs", [])
-        for plc in plcs:
+        for idx, plc in enumerate(plcs):
             frame = ctk.CTkFrame(self.scrollable_plc_frame)
             frame.pack(fill="x", padx=5, pady=5)
             
@@ -83,15 +84,40 @@ class DashboardView(ctk.CTkFrame):
             small_btn.pack(side="left", padx=5, pady=10)
             ToolTip(small_btn, "Test Connection")
             
-            # Date filter badge
+            # Interactive Date filter badge
             df = plc.get("date_filter", {})
             if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
                 df_badge = f"📅 {df['start_date']} - {df['end_date']}"
             else:
                 df_badge = "📅 All Files"
-            badge_lbl = ctk.CTkLabel(frame, text=df_badge, font=ctk.CTkFont(size=11, weight="bold"),
-                                     fg_color=("#E1BEE7", "#4A148C"), corner_radius=6, padx=8, pady=2)
-            badge_lbl.pack(side="left", padx=8, pady=10)
+
+            def edit_filter_for_plc(target_plc=plc, target_idx=idx):
+                def on_filter_saved(new_filter):
+                    cur_plcs = self.config_manager.get().get("plcs", [])
+                    if target_idx < len(cur_plcs):
+                        cur_plcs[target_idx]["date_filter"] = new_filter
+                        self.config_manager.update_plc(target_idx, cur_plcs[target_idx])
+                        self.refresh_plcs()
+                QuickDateFilterDialog(
+                    self,
+                    plc_name=target_plc["name"],
+                    current_filter=target_plc.get("date_filter"),
+                    on_save=on_filter_saved,
+                )
+
+            date_btn = ctk.CTkButton(
+                frame,
+                text=df_badge,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=("#E1BEE7", "#4A148C"),
+                hover_color=("#CE93D8", "#6A1B9A"),
+                text_color=("#311B92", "#F3E5F5"),
+                height=26,
+                corner_radius=6,
+                command=lambda p=plc, i=idx: edit_filter_for_plc(p, i)
+            )
+            date_btn.pack(side="left", padx=8, pady=10)
+            ToolTip(date_btn, "คลิกเพื่อแก้ไขช่วงวันที่ดาวน์โหลด (Click to edit date filter)")
 
             pb = ctk.CTkProgressBar(frame, width=130)
             pb.set(0)
