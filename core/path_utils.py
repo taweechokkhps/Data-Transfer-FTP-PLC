@@ -72,3 +72,15 @@ def format_batch_save_dir(base_dir: str, plc_name: str, machine_name: str, batch
     target = Path(base_dir) / plc_name / machine_name / batch_folder_name
     target.mkdir(parents=True, exist_ok=True)
     return target
+
+def get_batch_subdirs(batch_dir: Path | str) -> tuple[Path, Path]:
+    """
+    Given a batch directory path, returns (plaintext_dir, csv_dir) and ensures they exist.
+    """
+    b_path = Path(batch_dir)
+    plaintext_dir = b_path / "plaintext"
+    csv_dir = b_path / "csv"
+    plaintext_dir.mkdir(parents=True, exist_ok=True)
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    return plaintext_dir, csv_dir
+

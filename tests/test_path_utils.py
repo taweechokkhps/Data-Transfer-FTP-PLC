@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir
+from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir, get_batch_subdirs
 import datetime
 
 def test_sanitize_remote_path():
@@ -35,6 +35,14 @@ def test_format_batch_save_dir(tmp_path):
     assert p == target / "LINE 1" / "MC1" / "(01-04-2025 - 15-04-2025)"
     assert p.exists()
 
+def test_get_batch_subdirs(tmp_path):
+    target = tmp_path / "batch_folder"
+    pt_dir, csv_dir = get_batch_subdirs(target)
+    assert pt_dir == target / "plaintext"
+    assert csv_dir == target / "csv"
+    assert pt_dir.is_dir()
+    assert csv_dir.is_dir()
+
 if __name__ == "__main__":
     test_sanitize_remote_path()
     test_parse_date_from_filename()
@@ -42,4 +50,5 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as td:
         test_format_local_save_dir(Path(td))
         test_format_batch_save_dir(Path(td))
+        test_get_batch_subdirs(Path(td))
     print("ALL TESTS PASSED!")
