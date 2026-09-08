@@ -87,24 +87,93 @@ class SettingsView(ctk.CTkFrame):
         self.render_custom_chips()
 
         # ==========================================
-        # CARD 3: Auto Pull Interval
+        # CARD 3: Auto Pull Automation & Line Selection
         # ==========================================
         card_sched = ctk.CTkFrame(cards_container, corner_radius=10)
         card_sched.pack(fill="x", pady=(0, 20))
         
-        ctk.CTkLabel(card_sched, text="⏱️ Auto Pull Interval (รอบเวลาดึงข้อมูลอัตโนมัติ)", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=18, pady=(14, 2))
-        ctk.CTkLabel(card_sched, text="Time in minutes between automatic background downloads. Set to 0 to disable.",
-                     font=ctk.CTkFont(size=11), text_color="gray").pack(anchor="w", padx=18, pady=(0, 10))
+        # Header with Master Switch
+        sched_top = ctk.CTkFrame(card_sched, fg_color="transparent")
+        sched_top.pack(fill="x", padx=18, pady=(14, 2))
+        sched_top.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            sched_top, 
+            text="⏱️ Auto Pull & Download Automation (ระบบดึงข้อมูลอัตโนมัติ)", 
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).grid(row=0, column=0, sticky="w")
+
+        curr_enabled = self.config["global_settings"].get("auto_pull_enabled", True)
+        self.auto_pull_enabled_var = ctk.BooleanVar(value=curr_enabled)
         
-        interval_row = ctk.CTkFrame(card_sched, fg_color="transparent")
-        interval_row.pack(fill="x", padx=18, pady=(0, 16))
-        
+        self.auto_pull_switch = ctk.CTkSwitch(
+            sched_top,
+            text="เปิดใช้งาน (Active)" if curr_enabled else "ปิดใช้งาน (Disabled)",
+            variable=self.auto_pull_enabled_var,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.toggle_auto_pull_switch
+        )
+        self.auto_pull_switch.grid(row=0, column=1, sticky="e")
+
+        ctk.CTkLabel(
+            card_sched, 
+            text="ตั้งเวลารอบดาวน์โหลดอัตโนมัติในพื้นหลัง และเลือกเฉพาะ Line การผลิตที่ต้องการให้ทำงาน",
+            font=ctk.CTkFont(size=11), 
+            text_color="gray"
+        ).pack(anchor="w", padx=18, pady=(0, 10))
+
+        # Body Container (Holds interval and line selector)
+        self.sched_body = ctk.CTkFrame(card_sched, fg_color="transparent")
+        if curr_enabled:
+            self.sched_body.pack(fill="x", padx=18, pady=(0, 16))
+
+        # 1. Interval row
+        interval_row = ctk.CTkFrame(self.sched_body, fg_color="transparent")
+        interval_row.pack(fill="x", pady=(0, 12))
+
+        ctk.CTkLabel(interval_row, text="รอบเวลาดึงข้อมูล (Interval):", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(0, 10))
+
         curr_int = self.config["global_settings"].get("auto_pull_interval_minutes", 60)
         self.interval_var = ctk.StringVar(value=str(curr_int))
-        self.interval_entry = ctk.CTkEntry(interval_row, textvariable=self.interval_var, width=90, height=34, font=ctk.CTkFont(size=13, weight="bold"))
-        self.interval_entry.pack(side="left", padx=(0, 10))
-        
-        ctk.CTkLabel(interval_row, text="Minutes (นาที)  —  [ 0 = ปิดการดึงอัตโนมัติ ]", font=ctk.CTkFont(size=12), text_color="gray").pack(side="left")
+        self.interval_entry = ctk.CTkEntry(interval_row, textvariable=self.interval_var, width=80, height=32, font=ctk.CTkFont(size=13, weight="bold"))
+        self.interval_entry.pack(side="left", padx=(0, 8))
+        self.interval_entry.bind("<FocusOut>", lambda e: self.save_settings(show_feedback=False))
+        self.interval_entry.bind("<Return>", lambda e: self.save_settings(show_feedback=False))
+
+        ctk.CTkLabel(interval_row, text="นาที (Minutes)  [ค่าเริ่มต้น 60 นาที]", font=ctk.CTkFont(size=12), text_color="gray").pack(side="left")
+
+        # 2. Line Selector Frame
+        lines_header = ctk.CTkFrame(self.sched_body, fg_color="transparent")
+        lines_header.pack(fill="x", pady=(6, 4))
+        lines_header.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            lines_header, 
+            text="🏭 เลือก Line การผลิตที่เข้าร่วม Auto Pull (Select Lines):", 
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).grid(row=0, column=0, sticky="w")
+
+        btn_box = ctk.CTkFrame(lines_header, fg_color="transparent")
+        btn_box.grid(row=0, column=1, sticky="e")
+
+        ctk.CTkButton(
+            btn_box, text="เลือกทั้งหมด", width=75, height=24, font=ctk.CTkFont(size=11),
+            fg_color=("gray80", "gray25"), hover_color=("gray70", "gray35"), text_color=("black", "white"),
+            command=self.select_all_auto_lines
+        ).pack(side="left", padx=(0, 4))
+
+        ctk.CTkButton(
+            btn_box, text="ยกเลิกทั้งหมด", width=80, height=24, font=ctk.CTkFont(size=11),
+            fg_color=("gray80", "gray25"), hover_color=("gray70", "gray35"), text_color=("black", "white"),
+            command=self.deselect_all_auto_lines
+        ).pack(side="left")
+
+        # Checkboxes container for lines
+        self.lines_checkboxes_frame = ctk.CTkFrame(self.sched_body, fg_color=("gray90", "gray18"), corner_radius=8)
+        self.lines_checkboxes_frame.pack(fill="x", pady=(4, 6))
+
+        self.line_vars = {}
+        self.render_lines_checkboxes()
 
         # ==========================================
         # Bottom Save Bar
@@ -112,11 +181,91 @@ class SettingsView(ctk.CTkFrame):
         save_bar = ctk.CTkFrame(self, fg_color="transparent")
         save_bar.pack(fill="x", padx=20, pady=(0, 15))
         
-        btn_save = ctk.CTkButton(save_bar, text="💾 Save Settings", font=ctk.CTkFont(size=13, weight="bold"), height=38, width=150, command=self.save_settings)
+        btn_save = ctk.CTkButton(save_bar, text="💾 Save Settings", font=ctk.CTkFont(size=13, weight="bold"), height=38, width=150, command=lambda: self.save_settings(show_feedback=True))
         btn_save.pack(side="left")
         
         self.saved_feedback = ctk.CTkLabel(save_bar, text="", font=ctk.CTkFont(size=13, weight="bold"))
         self.saved_feedback.pack(side="left", padx=15)
+
+    def toggle_auto_pull_switch(self):
+        is_on = self.auto_pull_enabled_var.get()
+        if is_on:
+            self.auto_pull_switch.configure(text="เปิดใช้งาน (Active)")
+            self.sched_body.pack(fill="x", padx=18, pady=(0, 16))
+        else:
+            self.auto_pull_switch.configure(text="ปิดใช้งาน (Disabled)")
+            self.sched_body.pack_forget()
+        self.save_settings(show_feedback=False)
+
+    def on_line_toggled(self):
+        self.save_settings(show_feedback=False)
+
+    def select_all_auto_lines(self):
+        for var in self.line_vars.values():
+            var.set(True)
+        self.save_settings(show_feedback=False)
+
+    def deselect_all_auto_lines(self):
+        for var in self.line_vars.values():
+            var.set(False)
+        self.save_settings(show_feedback=False)
+
+    def sync_from_config(self):
+        g = self.config_manager.get()["global_settings"]
+        is_on = g.get("auto_pull_enabled", True)
+        self.auto_pull_enabled_var.set(is_on)
+        self.auto_pull_switch.configure(text="เปิดใช้งาน (Active)" if is_on else "ปิดใช้งาน (Disabled)")
+        self.interval_var.set(str(g.get("auto_pull_interval_minutes", 60)))
+        if is_on:
+            self.sched_body.pack(fill="x", padx=18, pady=(0, 16))
+        else:
+            self.sched_body.pack_forget()
+        self.render_lines_checkboxes()
+
+    def render_lines_checkboxes(self):
+        for w in self.lines_checkboxes_frame.winfo_children():
+            w.destroy()
+
+        plcs = self.config_manager.get().get("plcs", [])
+        if not plcs:
+            ctk.CTkLabel(
+                self.lines_checkboxes_frame,
+                text="ยังไม่มีรายการ Line ในระบบ (สามารถเพิ่มได้ที่แท็บ PLC Manager)",
+                font=ctk.CTkFont(size=11),
+                text_color="gray"
+            ).pack(padx=14, pady=10)
+            return
+
+        saved_selected = self.config_manager.get()["global_settings"].get("auto_pull_lines", None)
+        self.line_vars = {}
+        for p in plcs:
+            name = p.get("name", "Unnamed Line")
+            is_checked = True if saved_selected is None else (name in saved_selected)
+            var = ctk.BooleanVar(value=is_checked)
+            self.line_vars[name] = var
+
+            machines = p.get("machines", [])
+            mc_cnt = len(machines) if machines else 1
+            mc_str = f"{mc_cnt} MC{'s' if mc_cnt > 1 else ''}"
+
+            row_item = ctk.CTkFrame(self.lines_checkboxes_frame, fg_color=("white", "#262626"), corner_radius=6)
+            row_item.pack(fill="x", padx=8, pady=4)
+
+            cb = ctk.CTkCheckBox(
+                row_item,
+                text=name,
+                variable=var,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                command=self.on_line_toggled
+            )
+            cb.pack(side="left", padx=(10, 6), pady=8)
+
+            ctk.CTkLabel(
+                row_item,
+                text=f"🌐 {p.get('host', '')}:{p.get('port', 21)}  •  {mc_str}",
+                font=ctk.CTkFont(size=11),
+                text_color=("gray50", "gray70")
+            ).pack(side="left", padx=4)
 
     def render_custom_chips(self):
         for w in self.custom_chips_frame.winfo_children():
@@ -157,20 +306,25 @@ class SettingsView(ctk.CTkFrame):
             self.target_dir_var.set(dir_name)
             self.config_manager.update_global_settings({"target_directory": dir_name})
 
-    def save_settings(self):
+    def save_settings(self, show_feedback=True):
         exts = self.get_selected_extensions()
         val = self.interval_var.get().strip()
         interval = int(val) if val.isdigit() else 0
-            
+        is_enabled = self.auto_pull_enabled_var.get()
+        selected_lines = [name for name, var in self.line_vars.items() if var.get()]
+
         settings = {
             "target_directory": self.target_dir_var.get().strip(),
             "file_extensions": exts,
             "separate_by_date": False,
-            "auto_pull_interval_minutes": interval
+            "auto_pull_enabled": is_enabled,
+            "auto_pull_interval_minutes": interval,
+            "auto_pull_lines": selected_lines
         }
         self.config_manager.update_global_settings(settings)
         if self.on_settings_changed:
             self.on_settings_changed()
             
-        self.saved_feedback.configure(text="✓ Settings Saved Successfully!", text_color="#00E676")
-        self.after(3000, lambda: self.saved_feedback.configure(text=""))
+        if show_feedback:
+            self.saved_feedback.configure(text="✓ บันทึกการตั้งค่าสำเร็จ! (Settings Saved)", text_color="#00E676")
+            self.after(3000, lambda: self.saved_feedback.configure(text=""))

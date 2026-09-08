@@ -4,6 +4,7 @@ import time
 import os
 import sys
 from core.config_service import ConfigManager
+from core.logger import logger
 from ui.views.dashboard_view import DashboardView
 from ui.views.plc_manager_view import PLCManagerView
 from ui.views.settings_view import SettingsView
@@ -126,37 +127,63 @@ class App(ctk.CTk):
         curr = self.config_manager.get()["global_settings"].get("target_directory", "")
         if curr and self.target_dir_var.get() != curr:
             self.target_dir_var.set(curr)
+        self.settings_view.sync_from_config()
 
     def on_settings_saved(self):
         self.start_auto_pull_timer()
         curr = self.config_manager.get()["global_settings"].get("target_directory", "")
         if curr:
             self.target_dir_var.set(curr)
+        self.dashboard_view.refresh_plcs()
 
     def start_auto_pull_timer(self):
         if self.auto_pull_job is not None:
             self.after_cancel(self.auto_pull_job)
             self.auto_pull_job = None
 
-        interval_mins = self.config_manager.get()["global_settings"].get("auto_pull_interval_minutes", 60)
-        if interval_mins > 0:
+        g_settings = self.config_manager.get()["global_settings"]
+        is_enabled = g_settings.get("auto_pull_enabled", True)
+        interval_mins = g_settings.get("auto_pull_interval_minutes", 60)
+
+        if is_enabled and interval_mins > 0:
             interval_ms = interval_mins * 60 * 1000
             self.next_pull_time = time.time() + (interval_ms / 1000.0)
             self.auto_pull_job = self.after(interval_ms, self.trigger_auto_pull)
         else:
             self.next_pull_time = 0
-            self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled")
+            if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
+                self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled (ปิด)")
 
     def update_cooldown_ui(self):
-        if self.next_pull_time > 0:
+        g_settings = self.config_manager.get().get("global_settings", {})
+        is_enabled = g_settings.get("auto_pull_enabled", True)
+        interval_mins = g_settings.get("auto_pull_interval_minutes", 60)
+
+        if not is_enabled or interval_mins <= 0:
+            if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
+                self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled (ปิด)")
+        elif self.next_pull_time > 0:
             remaining = int(self.next_pull_time - time.time())
-            if remaining > 0:
+            lines = g_settings.get("auto_pull_lines", [])
+            if not lines:
+                self.dashboard_view.cooldown_label.configure(text="Auto Pull: No Lines Selected (ยังไม่เลือก Line)")
+            elif remaining > 0:
                 mins, secs = divmod(remaining, 60)
-                self.dashboard_view.cooldown_label.configure(text=f"Next Auto Pull in: {mins:02d}:{secs:02d}")
+                lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
+                self.dashboard_view.cooldown_label.configure(text=f"Next Auto Pull{lines_str} in: {mins:02d}:{secs:02d}")
             else:
-                self.dashboard_view.cooldown_label.configure(text="Pulling...")
+                lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
+                self.dashboard_view.cooldown_label.configure(text=f"Pulling{lines_str}...")
         self.after(1000, self.update_cooldown_ui)
 
     def trigger_auto_pull(self):
-        self.dashboard_view.download_all()
+        g_settings = self.config_manager.get().get("global_settings", {})
+        is_enabled = g_settings.get("auto_pull_enabled", True)
+        if is_enabled:
+            target_lines = g_settings.get("auto_pull_lines", [])
+            if target_lines:
+                logger.info(f"[Auto Pull] Triggering download for selected lines: {target_lines}")
+                self.dashboard_view.download_selected_lines(target_lines)
+            else:
+                logger.warning("[Auto Pull] Skipped: No production lines selected in Settings.")
         self.start_auto_pull_timer()

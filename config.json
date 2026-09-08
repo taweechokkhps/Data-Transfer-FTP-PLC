@@ -5,7 +5,12 @@
             ".txt"
         ],
         "separate_by_date": false,
-        "auto_pull_interval_minutes": 0
+        "auto_pull_interval_minutes": 1,
+        "auto_pull_enabled": true,
+        "auto_pull_lines": [
+            "LINE 1",
+            "REAL-PLC"
+        ]
     },
     "plcs": [
         {
@@ -14,6 +19,7 @@
             "port": 21,
             "username": "user",
             "password": "156900",
+            "ftp_mode": "auto",
             "machines": [
                 {
                     "name": "MC1 Connector Leak",
@@ -22,17 +28,17 @@
             ],
             "date_filter": {
                 "mode": "all",
-                "start_date": "",
-                "end_date": ""
-            },
-            "ftp_mode": "auto"
+                "start_date": "07/09/2026",
+                "end_date": "23/09/2026"
+            }
         },
         {
-            "name": "LINE 1",
+            "name": "REAL-PLC",
             "host": "192.168.0.11",
             "port": 21,
             "username": "admin",
             "password": "admin",
+            "ftp_mode": "active",
             "machines": [
                 {
                     "name": "MC1",
@@ -40,11 +46,10 @@
                 }
             ],
             "date_filter": {
-                "mode": "range",
+                "mode": "all",
                 "start_date": "14/05/2025",
                 "end_date": "14/05/2025"
-            },
-            "ftp_mode": "auto"
+            }
         }
     ]
 }

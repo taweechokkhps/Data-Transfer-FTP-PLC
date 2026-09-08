@@ -11,7 +11,9 @@ DEFAULT_CONFIG = {
         "target_directory": DEFAULT_TARGET_DIR,
         "file_extensions": [".txt", ".csv"],
         "separate_by_date": False,
-        "auto_pull_interval_minutes": 60
+        "auto_pull_enabled": True,
+        "auto_pull_interval_minutes": 60,
+        "auto_pull_lines": []
     },
     "plcs": []
 }
@@ -63,6 +65,16 @@ class ConfigManager:
                     if "global_settings" not in data:
                         data["global_settings"] = {}
                     data["global_settings"]["target_directory"] = DEFAULT_TARGET_DIR
+                    needs_save = True
+
+                # Ensure auto_pull_enabled exists
+                if "auto_pull_enabled" not in data.get("global_settings", {}):
+                    data["global_settings"]["auto_pull_enabled"] = True
+                    needs_save = True
+
+                # Ensure auto_pull_lines exists
+                if "auto_pull_lines" not in data.get("global_settings", {}):
+                    data["global_settings"]["auto_pull_lines"] = [p.get("name") for p in data.get("plcs", []) if p.get("name")]
                     needs_save = True
 
                 if needs_save:

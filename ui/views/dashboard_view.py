@@ -18,6 +18,7 @@ class DashboardView(ctk.CTkFrame):
         self.target_dir_var = target_dir_var
         self.request_timer_reset_cb = request_timer_reset_cb
         self.plc_download_callbacks = []
+        self.plc_download_by_name = {}
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
@@ -153,10 +154,14 @@ class DashboardView(ctk.CTkFrame):
 
     def refresh_plcs(self):
         self.plc_download_callbacks.clear()
+        self.plc_download_by_name.clear()
         for w in self.scrollable_plc_frame.winfo_children():
             w.destroy()
 
         plcs = self.config_manager.get().get("plcs", [])
+        g_settings = self.config_manager.get().get("global_settings", {})
+        is_auto_on = g_settings.get("auto_pull_enabled", True)
+        auto_lines = g_settings.get("auto_pull_lines", [])
         self.summary_badge.configure(text=f"Total: {len(plcs)} PLC(s) configured")
 
         if not plcs:
@@ -185,12 +190,28 @@ class DashboardView(ctk.CTkFrame):
             info_frame = ctk.CTkFrame(top_row, fg_color="transparent")
             info_frame.grid(row=0, column=0, sticky="w")
 
+            title_box = ctk.CTkFrame(info_frame, fg_color="transparent")
+            title_box.pack(anchor="w")
+
             title_lbl = ctk.CTkLabel(
-                info_frame,
+                title_box,
                 text=plc.get("name", f"PLC {idx+1}"),
                 font=ctk.CTkFont(size=14, weight="bold")
             )
-            title_lbl.pack(anchor="w")
+            title_lbl.pack(side="left")
+
+            if is_auto_on and plc.get("name") in auto_lines:
+                auto_badge = ctk.CTkLabel(
+                    title_box,
+                    text="⏱ Auto",
+                    font=ctk.CTkFont(size=10, weight="bold"),
+                    text_color="#10B981",
+                    fg_color=("#E8F5E9", "#133E2B"),
+                    corner_radius=4,
+                    padx=6,
+                    pady=1
+                )
+                auto_badge.pack(side="left", padx=(8, 0))
 
             machines = plc.get("machines", [])
             if not machines:
@@ -328,6 +349,9 @@ class DashboardView(ctk.CTkFrame):
             dl_trigger = make_dl_trigger()
             btn_dl.configure(command=dl_trigger)
             self.plc_download_callbacks.append(dl_trigger)
+            plc_name = plc.get("name")
+            if plc_name:
+                self.plc_download_by_name[plc_name] = dl_trigger
 
     def test_single_connection(self, plc_data, status_label, counter_label=None):
         def run():
@@ -435,5 +459,17 @@ class DashboardView(ctk.CTkFrame):
     def download_all(self):
         for trigger in self.plc_download_callbacks:
             trigger()
+        if self.request_timer_reset_cb:
+            self.request_timer_reset_cb()
+
+    def download_selected_lines(self, target_line_names=None):
+        if target_line_names is None:
+            for trigger in self.plc_download_callbacks:
+                trigger()
+        else:
+            for name in target_line_names:
+                trigger = self.plc_download_by_name.get(name)
+                if trigger:
+                    trigger()
         if self.request_timer_reset_cb:
             self.request_timer_reset_cb()

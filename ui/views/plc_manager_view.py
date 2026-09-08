@@ -102,32 +102,9 @@ class PLCManagerView(ctk.CTkFrame):
                 text_color=("#666666", "#9E9E9E")
             ).pack(anchor="w", pady=(2, 0))
 
-            # Right: Date badge + Edit/Delete buttons
+            # Right: Edit/Delete action buttons
             actions_frame = ctk.CTkFrame(top_row, fg_color="transparent")
             actions_frame.grid(row=0, column=1, sticky="e")
-
-            # Date Filter Badge
-            df = plc.get("date_filter", {})
-            if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
-                df_badge = f"📅 {df['start_date']} ➔ {df['end_date']}"
-                badge_fg = ("#EDE7F6", "#311B92")
-                badge_text = ("#311B92", "#EDE7F6")
-            else:
-                df_badge = "📅 All Files"
-                badge_fg = ("#E0E0E0", "#2D2D2D")
-                badge_text = ("#424242", "#BDBDBD")
-
-            date_chip = ctk.CTkLabel(
-                actions_frame,
-                text=df_badge,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                fg_color=badge_fg,
-                text_color=badge_text,
-                corner_radius=6,
-                padx=10,
-                pady=4
-            )
-            date_chip.pack(side="left", padx=(0, 10))
 
             edit_btn = ctk.CTkButton(
                 actions_frame,
@@ -207,6 +184,23 @@ class PLCManagerView(ctk.CTkFrame):
                     text_color=("#666666", "#9E9E9E")
                 )
                 mc_path_lbl.pack(side="left", padx=(0, 8), pady=4)
+
+            # Date Filter info (informative label at the bottom, not looking like a button)
+            df = plc.get("date_filter", {})
+            if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
+                df_str = f"📅 Date Filter: {df['start_date']} ➔ {df['end_date']}"
+                df_color = ("#5E35B1", "#B39DDB")
+            else:
+                df_str = "📅 Date Filter: All Files (ดาวน์โหลดไฟล์ทั้งหมด)"
+                df_color = ("#757575", "#9E9E9E")
+
+            df_lbl = ctk.CTkLabel(
+                mc_section,
+                text=df_str,
+                font=ctk.CTkFont(size=11),
+                text_color=df_color
+            )
+            df_lbl.pack(anchor="w", pady=(8, 0))
 
     def delete_plc(self, index):
         plcs = self.config_manager.get().get("plcs", [])
