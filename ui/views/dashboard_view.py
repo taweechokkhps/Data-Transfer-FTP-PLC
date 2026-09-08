@@ -176,14 +176,14 @@ class DashboardView(ctk.CTkFrame):
             card.pack(fill="x", padx=4, pady=5)
             card.grid_columnconfigure(0, weight=1)
 
-            # ======== ROW 0: PLC Info (left) + Date Badge (center) + Action Buttons (right) ========
+            # ======== ROW 0: PLC Info (left) + Action Buttons (right) ========
             top_row = ctk.CTkFrame(card, fg_color="transparent")
             top_row.grid(row=0, column=0, padx=14, pady=(10, 4), sticky="ew")
-            top_row.grid_columnconfigure(1, weight=1)  # date badge stretches
+            top_row.grid_columnconfigure(0, weight=1)
 
             # -- PLC Name & Details --
             info_frame = ctk.CTkFrame(top_row, fg_color="transparent")
-            info_frame.grid(row=0, column=0, sticky="w", padx=(0, 12))
+            info_frame.grid(row=0, column=0, sticky="w")
 
             title_lbl = ctk.CTkLabel(
                 info_frame,
@@ -213,7 +213,75 @@ class DashboardView(ctk.CTkFrame):
             )
             sub_lbl.pack(anchor="w")
 
-            # -- Date Filter Badge (center, fixed width) --
+            # -- Action Buttons (right) --
+            action_frame = ctk.CTkFrame(top_row, fg_color="transparent")
+            action_frame.grid(row=0, column=1, sticky="e")
+
+            btn_test = ctk.CTkButton(
+                action_frame,
+                text="🔌 Test",
+                width=65,
+                height=30,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=("#E0E0E0", "#333333"),
+                hover_color=("#D5D5D5", "#444444"),
+                text_color=("#212121", "#FFFFFF")
+            )
+            btn_test.pack(side="left", padx=(0, 6))
+
+            btn_dl = ctk.CTkButton(
+                action_frame,
+                text="⬇ Download",
+                width=100,
+                height=30,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color="white"
+            )
+            btn_dl.pack(side="left")
+
+            # ======== ROW 1: Status + Progress bar + Timer (full width) ========
+            mid_row = ctk.CTkFrame(card, fg_color="transparent")
+            mid_row.grid(row=1, column=0, padx=14, pady=(0, 4), sticky="ew")
+            mid_row.grid_columnconfigure(1, weight=1)
+
+            status_badge = ctk.CTkLabel(
+                mid_row,
+                text="● Ready",
+                width=100,
+                anchor="w",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color="#9E9E9E"
+            )
+            status_badge.grid(row=0, column=0, sticky="w", padx=(0, 8))
+
+            pb = ctk.CTkProgressBar(mid_row, height=8, corner_radius=4)
+            pb.set(0)
+            pb.grid(row=0, column=1, sticky="ew", padx=4)
+
+            counter_lbl = ctk.CTkLabel(
+                mid_row,
+                text="พร้อมดาวน์โหลด",
+                width=140,
+                anchor="e",
+                font=ctk.CTkFont(size=11),
+                text_color=("#888888", "#757575")
+            )
+            counter_lbl.grid(row=0, column=2, sticky="e", padx=(8, 4))
+
+            timer_lbl = ctk.CTkLabel(
+                mid_row,
+                text="",
+                width=70,
+                anchor="e",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color="#3B8ED0"
+            )
+            timer_lbl.grid(row=0, column=3, sticky="e")
+
+            # ======== ROW 2: Date Filter Badge (below status) ========
+            bottom_row = ctk.CTkFrame(card, fg_color="transparent")
+            bottom_row.grid(row=2, column=0, padx=14, pady=(0, 10), sticky="ew")
+
             df = plc.get("date_filter", {})
             if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
                 df_badge = f"📅 {df['start_date']} ➔ {df['end_date']}"
@@ -241,85 +309,18 @@ class DashboardView(ctk.CTkFrame):
                 )
 
             date_btn = ctk.CTkButton(
-                top_row,
+                bottom_row,
                 text=df_badge,
                 width=220,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color=badge_fg,
                 hover_color=badge_hover,
                 text_color=badge_text,
-                height=30,
+                height=28,
                 corner_radius=8,
                 command=lambda p=plc, i=idx: edit_filter_for_plc(p, i)
             )
-            date_btn.grid(row=0, column=1, padx=8, sticky="w")
-            ToolTip(date_btn, "คลิกเพื่อแก้ไขช่วงวันที่ (Click to edit date filter)")
-
-            # -- Action Buttons (right) --
-            action_frame = ctk.CTkFrame(top_row, fg_color="transparent")
-            action_frame.grid(row=0, column=2, sticky="e")
-
-            btn_test = ctk.CTkButton(
-                action_frame,
-                text="🔌 Test",
-                width=65,
-                height=30,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                fg_color=("#E0E0E0", "#333333"),
-                hover_color=("#D5D5D5", "#444444"),
-                text_color=("#212121", "#FFFFFF")
-            )
-            btn_test.pack(side="left", padx=(0, 6))
-            ToolTip(btn_test, "ทดสอบการเชื่อมต่อ FTP")
-
-            btn_dl = ctk.CTkButton(
-                action_frame,
-                text="⬇ Download",
-                width=100,
-                height=30,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color="white"
-            )
-            btn_dl.pack(side="left")
-
-            # ======== ROW 1: Progress bar + Status + Timer (full width) ========
-            bottom_row = ctk.CTkFrame(card, fg_color="transparent")
-            bottom_row.grid(row=1, column=0, padx=14, pady=(0, 10), sticky="ew")
-            bottom_row.grid_columnconfigure(1, weight=1)  # progress bar stretches
-
-            status_badge = ctk.CTkLabel(
-                bottom_row,
-                text="● Ready",
-                width=100,
-                anchor="w",
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color="#9E9E9E"
-            )
-            status_badge.grid(row=0, column=0, sticky="w", padx=(0, 8))
-
-            pb = ctk.CTkProgressBar(bottom_row, height=8, corner_radius=4)
-            pb.set(0)
-            pb.grid(row=0, column=1, sticky="ew", padx=4)
-
-            counter_lbl = ctk.CTkLabel(
-                bottom_row,
-                text="พร้อมดาวน์โหลด",
-                width=140,
-                anchor="e",
-                font=ctk.CTkFont(size=11),
-                text_color=("#888888", "#757575")
-            )
-            counter_lbl.grid(row=0, column=2, sticky="e", padx=(8, 4))
-
-            timer_lbl = ctk.CTkLabel(
-                bottom_row,
-                text="",
-                width=70,
-                anchor="e",
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color="#3B8ED0"
-            )
-            timer_lbl.grid(row=0, column=3, sticky="e")
+            date_btn.pack(side="left")
 
             # -- Wire up button commands --
             btn_test.configure(command=lambda p=plc, stat=status_badge, c_lbl=counter_lbl: self.test_single_connection(p, stat, c_lbl))
