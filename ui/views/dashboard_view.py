@@ -344,7 +344,7 @@ class DashboardView(ctk.CTkFrame):
             btn_test.configure(command=lambda p=plc, stat=status_badge, c_lbl=counter_lbl: self.test_single_connection(p, stat, c_lbl))
 
             def make_dl_trigger(p=plc, progress=pb, stat=status_badge, t_lbl=timer_lbl, c_lbl=counter_lbl, b=btn_dl):
-                return lambda: self.download_single(p, progress, stat, t_lbl, c_lbl, b)
+                return lambda on_finish=None: self.download_single(p, progress, stat, t_lbl, c_lbl, b, on_finish_callback=on_finish)
 
             dl_trigger = make_dl_trigger()
             btn_dl.configure(command=dl_trigger)
@@ -377,7 +377,7 @@ class DashboardView(ctk.CTkFrame):
                 logger.error(f"[{plc_data['name']}] Connection Test: Failed ({msg})")
         threading.Thread(target=run, daemon=True).start()
 
-    def download_single(self, plc_data, progress_bar, status_label, timer_label=None, counter_label=None, action_button=None):
+    def download_single(self, plc_data, progress_bar, status_label, timer_label=None, counter_label=None, action_button=None, on_finish_callback=None):
         g_settings = self.config_manager.get()["global_settings"]
         target_dir = self.target_dir_var.get().strip() or g_settings.get("target_directory", "").strip()
         if not target_dir:
@@ -453,23 +453,37 @@ class DashboardView(ctk.CTkFrame):
                     self.after(0, lambda: timer_label.configure(text=f"⏱ {time_str}", text_color="#00E676"))
                 if action_button:
                     self.after(0, lambda: action_button.configure(state="normal"))
+                if on_finish_callback:
+                    self.after(0, on_finish_callback)
 
         threading.Thread(target=run, daemon=True).start()
 
-    def download_all(self):
-        for trigger in self.plc_download_callbacks:
-            trigger()
-        if self.request_timer_reset_cb:
-            self.request_timer_reset_cb()
+    def download_all(self, on_complete=None):
+        self.download_selected_lines(None, on_complete=on_complete)
 
-    def download_selected_lines(self, target_line_names=None):
+    def download_selected_lines(self, target_line_names=None, on_complete=None):
         if target_line_names is None:
-            for trigger in self.plc_download_callbacks:
-                trigger()
+            triggers = list(self.plc_download_callbacks)
         else:
-            for name in target_line_names:
-                trigger = self.plc_download_by_name.get(name)
-                if trigger:
-                    trigger()
-        if self.request_timer_reset_cb:
+            triggers = [self.plc_download_by_name[name] for name in target_line_names if name in self.plc_download_by_name]
+
+        if not triggers:
+            if on_complete:
+                self.after(0, on_complete)
+            return
+
+        remaining = [len(triggers)]
+        lock = threading.Lock()
+
+        def on_line_finished():
+            with lock:
+                remaining[0] -= 1
+                if remaining[0] <= 0:
+                    if on_complete:
+                        self.after(0, on_complete)
+
+        for trigger in triggers:
+            trigger(on_finish=on_line_finished)
+
+        if self.request_timer_reset_cb and not on_complete:
             self.request_timer_reset_cb()
