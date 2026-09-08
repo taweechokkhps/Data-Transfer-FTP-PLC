@@ -27,6 +27,15 @@ class App(ctk.CTk):
         self.title("FTP Get Data Record Process Critical Control")
         self.geometry("920x620")
         self.minsize(820, 520)
+        
+        # Start window maximized
+        try:
+            self.state("zoomed")
+        except Exception:
+            try:
+                self.attributes("-zoomed", True)
+            except Exception:
+                pass
 
         def resource_path(relative_path):
             try:
