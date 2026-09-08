@@ -213,7 +213,7 @@ class DashboardView(ctk.CTkFrame):
             )
             sub_lbl.pack(anchor="w")
 
-            # -- Action Buttons (right) --
+            # -- Action Buttons + Date Badge (right): Test | Date | Download --
             action_frame = ctk.CTkFrame(top_row, fg_color="transparent")
             action_frame.grid(row=0, column=1, sticky="e")
 
@@ -229,6 +229,47 @@ class DashboardView(ctk.CTkFrame):
             )
             btn_test.pack(side="left", padx=(0, 6))
 
+            # Date Filter Badge (between Test and Download)
+            df = plc.get("date_filter", {})
+            if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
+                df_badge = f"📅 {df['start_date']} ➔ {df['end_date']}"
+                badge_fg = ("#EDE7F6", "#311B92")
+                badge_hover = ("#D1C4E9", "#4A148C")
+                badge_text = ("#311B92", "#EDE7F6")
+            else:
+                df_badge = "📅 All Files"
+                badge_fg = ("#E0E0E0", "#2D2D2D")
+                badge_hover = ("#D5D5D5", "#3D3D3D")
+                badge_text = ("#424242", "#BDBDBD")
+
+            def edit_filter_for_plc(target_plc=plc, target_idx=idx):
+                def on_filter_saved(new_filter):
+                    cur_plcs = self.config_manager.get().get("plcs", [])
+                    if target_idx < len(cur_plcs):
+                        cur_plcs[target_idx]["date_filter"] = new_filter
+                        self.config_manager.update_plc(target_idx, cur_plcs[target_idx])
+                        self.refresh_plcs()
+                QuickDateFilterDialog(
+                    self,
+                    plc_name=target_plc["name"],
+                    current_filter=target_plc.get("date_filter"),
+                    on_save=on_filter_saved,
+                )
+
+            date_btn = ctk.CTkButton(
+                action_frame,
+                text=df_badge,
+                width=220,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=badge_fg,
+                hover_color=badge_hover,
+                text_color=badge_text,
+                height=30,
+                corner_radius=8,
+                command=lambda p=plc, i=idx: edit_filter_for_plc(p, i)
+            )
+            date_btn.pack(side="left", padx=(0, 6))
+
             btn_dl = ctk.CTkButton(
                 action_frame,
                 text="⬇ Download",
@@ -241,7 +282,7 @@ class DashboardView(ctk.CTkFrame):
 
             # ======== ROW 1: Status + Progress bar + Timer (full width) ========
             mid_row = ctk.CTkFrame(card, fg_color="transparent")
-            mid_row.grid(row=1, column=0, padx=14, pady=(0, 4), sticky="ew")
+            mid_row.grid(row=1, column=0, padx=14, pady=(0, 10), sticky="ew")
             mid_row.grid_columnconfigure(1, weight=1)
 
             status_badge = ctk.CTkLabel(
@@ -277,50 +318,6 @@ class DashboardView(ctk.CTkFrame):
                 text_color="#3B8ED0"
             )
             timer_lbl.grid(row=0, column=3, sticky="e")
-
-            # ======== ROW 2: Date Filter Badge (below status) ========
-            bottom_row = ctk.CTkFrame(card, fg_color="transparent")
-            bottom_row.grid(row=2, column=0, padx=14, pady=(0, 10), sticky="ew")
-
-            df = plc.get("date_filter", {})
-            if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
-                df_badge = f"📅 {df['start_date']} ➔ {df['end_date']}"
-                badge_fg = ("#EDE7F6", "#311B92")
-                badge_hover = ("#D1C4E9", "#4A148C")
-                badge_text = ("#311B92", "#EDE7F6")
-            else:
-                df_badge = "📅 All Files"
-                badge_fg = ("#E0E0E0", "#2D2D2D")
-                badge_hover = ("#D5D5D5", "#3D3D3D")
-                badge_text = ("#424242", "#BDBDBD")
-
-            def edit_filter_for_plc(target_plc=plc, target_idx=idx):
-                def on_filter_saved(new_filter):
-                    cur_plcs = self.config_manager.get().get("plcs", [])
-                    if target_idx < len(cur_plcs):
-                        cur_plcs[target_idx]["date_filter"] = new_filter
-                        self.config_manager.update_plc(target_idx, cur_plcs[target_idx])
-                        self.refresh_plcs()
-                QuickDateFilterDialog(
-                    self,
-                    plc_name=target_plc["name"],
-                    current_filter=target_plc.get("date_filter"),
-                    on_save=on_filter_saved,
-                )
-
-            date_btn = ctk.CTkButton(
-                bottom_row,
-                text=df_badge,
-                width=220,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                fg_color=badge_fg,
-                hover_color=badge_hover,
-                text_color=badge_text,
-                height=28,
-                corner_radius=8,
-                command=lambda p=plc, i=idx: edit_filter_for_plc(p, i)
-            )
-            date_btn.pack(side="left")
 
             # -- Wire up button commands --
             btn_test.configure(command=lambda p=plc, stat=status_badge, c_lbl=counter_lbl: self.test_single_connection(p, stat, c_lbl))
