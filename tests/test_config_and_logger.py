@@ -38,7 +38,30 @@ def test_logger_callback():
     assert logs[0][1] == "info"
     assert logs[1][1] == "error"
 
+def test_logger_tags_and_switch_mode():
+    logs = []
+    logger = AppLogger()
+    cb = lambda msg, level: logs.append((msg, level))
+    logger.register_callback(cb)
+    logger.info("Normal info message")
+    logger.success("Operation succeeded")
+    logger.error("Operation failed")
+    logger.warning("Caution advised")
+    logger.switch_mode("Switched from PASV to PORT")
+    # Smart detection check
+    logger.log("Notice: 502 PASV not implemented. Switching to Active mode.")
+    logger.unregister_callback(cb)
+
+    assert len(logs) == 6
+    assert "[INFO]" in logs[0][0] and logs[0][1] == "info"
+    assert "[SUCCESS]" in logs[1][0] and logs[1][1] == "success"
+    assert "[ERROR]" in logs[2][0] and logs[2][1] == "error"
+    assert "[WARNING]" in logs[3][0] and logs[3][1] == "warning"
+    assert "[SWITCH MODE]" in logs[4][0] and logs[4][1] == "switch_mode"
+    assert "[SWITCH MODE]" in logs[5][0] and logs[5][1] == "switch_mode"
+
 if __name__ == "__main__":
     test_config_crud()
     test_logger_callback()
+    test_logger_tags_and_switch_mode()
     print("CONFIG AND LOGGER TESTS PASSED!")
