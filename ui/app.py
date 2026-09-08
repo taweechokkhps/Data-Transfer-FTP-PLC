@@ -88,11 +88,13 @@ class App(ctk.CTk):
         # Auto pull timer
         self.next_pull_time = 0
         self.auto_pull_job = None
+        self.next_pull_time = 0
+        self.is_auto_pulling = False
         self.start_auto_pull_timer()
         self.update_cooldown_ui()
 
         # Version
-        self.version_label = ctk.CTkLabel(self, text="v1.2.0", text_color="gray", font=ctk.CTkFont(size=12))
+        self.version_label = ctk.CTkLabel(self, text="v1.2.1", text_color="gray", font=ctk.CTkFont(size=12))
         self.version_label.place(relx=1.0, rely=1.0, anchor="se", x=-20, y=-10)
         self.version_label.lift()
 
@@ -161,29 +163,49 @@ class App(ctk.CTk):
 
         if not is_enabled or interval_mins <= 0:
             if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
-                self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled (ปิด)")
+                self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled (ปิด)", text_color="gray")
+        elif self.is_auto_pulling:
+            lines = g_settings.get("auto_pull_lines", [])
+            lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
+            if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
+                self.dashboard_view.cooldown_label.configure(text=f"🔄 Auto Pull: In Progress{lines_str}...", text_color="#FFA726")
         elif self.next_pull_time > 0:
             remaining = int(self.next_pull_time - time.time())
             lines = g_settings.get("auto_pull_lines", [])
             if not lines:
-                self.dashboard_view.cooldown_label.configure(text="Auto Pull: No Lines Selected (ยังไม่เลือก Line)")
+                self.dashboard_view.cooldown_label.configure(text="Auto Pull: No Lines Selected (ยังไม่เลือก Line)", text_color="#FFA726")
             elif remaining > 0:
                 mins, secs = divmod(remaining, 60)
                 lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
-                self.dashboard_view.cooldown_label.configure(text=f"Next Auto Pull{lines_str} in: {mins:02d}:{secs:02d}")
+                self.dashboard_view.cooldown_label.configure(text=f"Next Auto Pull{lines_str} in: {mins:02d}:{secs:02d}", text_color="#3B8ED0")
             else:
                 lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
-                self.dashboard_view.cooldown_label.configure(text=f"Pulling{lines_str}...")
+                self.dashboard_view.cooldown_label.configure(text=f"🔄 Pulling{lines_str}...", text_color="#FFA726")
         self.after(1000, self.update_cooldown_ui)
 
     def trigger_auto_pull(self):
         g_settings = self.config_manager.get().get("global_settings", {})
         is_enabled = g_settings.get("auto_pull_enabled", True)
-        if is_enabled:
-            target_lines = g_settings.get("auto_pull_lines", [])
-            if target_lines:
-                logger.info(f"[Auto Pull] Triggering download for selected lines: {target_lines}")
-                self.dashboard_view.download_selected_lines(target_lines)
-            else:
-                logger.warning("[Auto Pull] Skipped: No production lines selected in Settings.")
-        self.start_auto_pull_timer()
+        if not is_enabled:
+            return
+
+        if self.is_auto_pulling:
+            logger.warning("[Auto Pull] Skipped: Previous pull cycle is still in progress.")
+            return
+
+        target_lines = g_settings.get("auto_pull_lines", [])
+        if not target_lines:
+            logger.warning("[Auto Pull] Skipped: No production lines selected in Settings.")
+            self.start_auto_pull_timer()
+            return
+
+        self.is_auto_pulling = True
+        self.next_pull_time = 0
+        logger.info(f"[Auto Pull] Triggering download for selected lines: {target_lines}")
+
+        def on_all_finished():
+            self.is_auto_pulling = False
+            logger.success("[Auto Pull] All selected lines finished downloading. Starting countdown for next cycle.")
+            self.start_auto_pull_timer()
+
+        self.dashboard_view.download_selected_lines(target_lines, on_complete=on_all_finished)
