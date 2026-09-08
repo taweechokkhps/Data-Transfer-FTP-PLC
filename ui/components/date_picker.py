@@ -111,7 +111,6 @@ class DatePickerPopup(ctk.CTkToplevel):
         super().__init__(parent)
         self.on_select = on_select
         self.title("เลือกวันที่")
-        self.resizable(False, False)
 
         # Determine starting year & month
         parsed = parse_display_date(initial_date) if initial_date else None
@@ -340,7 +339,6 @@ class QuickDateFilterDialog(ctk.CTkToplevel):
         self.plc_name = plc_name
         self.on_save = on_save
         self.title(f"ตั้งค่าช่วงวันที่ - {plc_name}")
-        self.resizable(False, False)
 
         cur = current_filter or {}
         self.mode_var = tk.StringVar(value=cur.get("mode", "all"))
@@ -348,7 +346,7 @@ class QuickDateFilterDialog(ctk.CTkToplevel):
         self.end_date_var = tk.StringVar(value=cur.get("end_date", ""))
 
         self._build_ui()
-        setup_modal_dialog(self, parent, target_width=440, target_height=260, resizable=False)
+        setup_modal_dialog(self, parent, target_width=460, target_height=320, resizable=False)
 
     def _build_ui(self):
         container = ctk.CTkFrame(self, fg_color="transparent")

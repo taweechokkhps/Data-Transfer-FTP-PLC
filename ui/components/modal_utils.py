@@ -13,7 +13,6 @@ def flash_window(toplevel: ctk.CTkToplevel):
         
     try:
         toplevel.lift()
-        toplevel.focus_force()
     except Exception:
         pass
 
@@ -39,13 +38,17 @@ def setup_modal_dialog(
     Centers the dialog on screen, locks parent input (modal grab),
     keeps it on top, and flashes/alerts whenever the user attempts to click the parent.
     """
-    root = parent.winfo_toplevel()
+    root = parent.winfo_toplevel() if hasattr(parent, "winfo_toplevel") else parent
     
-    # 1. Transient and Topmost
-    dialog.transient(parent)
+    # 1. Transient to top-level root window
+    dialog.transient(root)
     dialog.attributes("-topmost", True)
+    
+    # Use super().resizable to prevent CustomTkinter from triggering duplicate withdraw/color calls
     if not resizable:
-        dialog.resizable(False, False)
+        super(ctk.CTkToplevel, dialog).resizable(False, False)
+    else:
+        super(ctk.CTkToplevel, dialog).resizable(True, True)
 
     # 2. Responsive Screen Centering
     dialog.update_idletasks()
@@ -63,31 +66,37 @@ def setup_modal_dialog(
     y = max(20, (sh - h) // 2 - 15)
     dialog.geometry(f"{w}x{h}+{x}+{y}")
 
-    # 3. Modal Grab & Focus
+    # 3. Explicitly deiconify, lift and set focus
+    dialog.deiconify()
     dialog.lift()
     dialog.focus_force()
     
     def ensure_grab():
         try:
             if dialog.winfo_exists():
-                dialog.grab_set()
+                dialog.deiconify()
+                dialog.attributes("-topmost", True)
+                dialog.lift()
                 dialog.focus_force()
+                dialog.grab_set()
         except Exception:
             pass
             
-    dialog.after(50, ensure_grab)
+    dialog.after(60, ensure_grab)
 
-    # 4. Intercept clicks and focus on root window
-    def on_parent_interaction(event=None):
-        if dialog.winfo_exists():
+    # 4. Intercept clicks and focus on root window while modal is open
+    def on_parent_click(event=None):
+        if dialog.winfo_exists() and dialog.winfo_ismapped():
             flash_window(dialog)
-            dialog.attributes("-topmost", True)
             dialog.lift()
-            dialog.focus_force()
             return "break"
 
-    bind_btn = root.bind("<Button-1>", on_parent_interaction, add="+")
-    bind_focus = root.bind("<FocusIn>", lambda e: on_parent_interaction(e) if e.widget == root else None, add="+")
+    def on_root_focus(event):
+        if event.widget == root and dialog.winfo_exists() and dialog.winfo_ismapped():
+            flash_window(dialog)
+
+    bind_btn = root.bind("<Button-1>", on_parent_click, add="+")
+    bind_focus = root.bind("<FocusIn>", on_root_focus, add="+")
 
     def on_destroy(event):
         if event.widget == dialog:
