@@ -16,24 +16,30 @@ class LogConsole(ctk.CTkFrame):
         self.textbox = ctk.CTkTextbox(self, height=height)
         self.textbox.pack(fill="x", expand=True)
         
-        self.textbox.tag_config("error", foreground="#FF5252")
+        self.textbox.tag_config("info", foreground="#64B5F6")
         self.textbox.tag_config("success", foreground="#00E676")
+        self.textbox.tag_config("error", foreground="#FF5252")
         self.textbox.tag_config("warning", foreground="#FFB74D")
+        self.textbox.tag_config("switch_mode", foreground="#E040FB")
 
     def append_message(self, message: str, level: str = None):
         tag = None
         if level:
-            tag = level.lower()
+            tag = level.lower().replace(" ", "_")
         else:
             lower = message.lower()
-            if "error" in lower or "fail" in lower:
+            if "[switch mode]" in lower or "502" in lower or "switching to active" in lower:
+                tag = "switch_mode"
+            elif "[error]" in lower or "error" in lower or "fail" in lower:
                 tag = "error"
-            elif "warning" in lower:
+            elif "[warning]" in lower or "warning" in lower:
                 tag = "warning"
-            elif "success" in lower or "ok" in lower or "completed" in lower or "finished" in lower:
+            elif "[success]" in lower or "success" in lower or "downloaded" in lower or "completed" in lower:
                 tag = "success"
+            elif "[info]" in lower:
+                tag = "info"
 
-        if tag in ["error", "success", "warning"]:
+        if tag in ["info", "success", "error", "warning", "switch_mode"]:
             self.textbox.insert("end", message + "\n", tag)
         else:
             self.textbox.insert("end", message + "\n")
