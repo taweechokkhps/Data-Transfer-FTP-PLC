@@ -28,14 +28,9 @@ class App(ctk.CTk):
         self.geometry("920x620")
         self.minsize(820, 520)
         
-        # Start window maximized
-        try:
-            self.state("zoomed")
-        except Exception:
-            try:
-                self.attributes("-zoomed", True)
-            except Exception:
-                pass
+        # Schedule window maximization after CustomTkinter initialization/deiconify
+        self.after(200, self._maximize_window)
+        self.after(400, self._maximize_window)
 
         def resource_path(relative_path):
             try:
@@ -99,6 +94,15 @@ class App(ctk.CTk):
         self.version_label = ctk.CTkLabel(self, text="v1.2.0", text_color="gray", font=ctk.CTkFont(size=12))
         self.version_label.place(relx=1.0, rely=1.0, anchor="se", x=-20, y=-10)
         self.version_label.lift()
+
+    def _maximize_window(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            try:
+                self.attributes("-zoomed", True)
+            except Exception:
+                pass
 
     def select_view(self, view):
         self.dashboard_view.grid_forget()
