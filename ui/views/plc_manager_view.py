@@ -83,25 +83,68 @@ class PLCManagerView(ctk.CTkFrame):
             del_btn.pack(side="left")
 
     def delete_plc(self, index):
-        self.config_manager.delete_plc(index)
-        self.refresh_list()
-        if self.on_plc_list_updated:
-            self.on_plc_list_updated()
+        plcs = self.config_manager.get().get("plcs", [])
+        plc_name = plcs[index].get("name", f"PLC {index+1}") if index < len(plcs) else f"PLC {index+1}"
+
+        confirm = ctk.CTkToplevel(self)
+        confirm.title("Confirm Delete")
+        confirm.geometry("420x180")
+        confirm.resizable(False, False)
+        confirm.grab_set()
+        confirm.attributes("-topmost", True)
+
+        ctk.CTkLabel(
+            confirm,
+            text="⚠️  ยืนยันการลบ (Confirm Delete)",
+            font=ctk.CTkFont(size=16, weight="bold")
+        ).pack(pady=(20, 8))
+
+        ctk.CTkLabel(
+            confirm,
+            text=f"ต้องการลบ '{plc_name}' ออกจากรายการหรือไม่?\nการกระทำนี้ไม่สามารถย้อนกลับได้",
+            font=ctk.CTkFont(size=13)
+        ).pack(pady=(0, 16))
+
+        btn_row = ctk.CTkFrame(confirm, fg_color="transparent")
+        btn_row.pack(pady=(0, 10))
+
+        def do_delete():
+            confirm.destroy()
+            self.config_manager.delete_plc(index)
+            self.refresh_list()
+            if self.on_plc_list_updated:
+                self.on_plc_list_updated()
+
+        ctk.CTkButton(
+            btn_row, text="❌ Delete", width=100, height=34,
+            fg_color="#d32f2f", hover_color="#b71c1c",
+            font=ctk.CTkFont(weight="bold"), command=do_delete
+        ).pack(side="left", padx=8)
+
+        ctk.CTkButton(
+            btn_row, text="Cancel", width=100, height=34,
+            fg_color="gray", hover_color="#555",
+            font=ctk.CTkFont(weight="bold"), command=confirm.destroy
+        ).pack(side="left", padx=8)
 
     def open_plc_dialog(self, edit_index=None):
         dialog = ctk.CTkToplevel(self)
         is_edit = edit_index is not None
         dialog.title("Edit Line / PLC" if is_edit else "Add New Line / PLC")
-        dialog.geometry("620x740")
-        dialog.minsize(580, 600)
+        dialog.geometry("700x850")
+        dialog.minsize(650, 700)
         dialog.grab_set()
+
+        # Scrollable content wrapper so everything fits even on small screens
+        scroll_wrapper = ctk.CTkScrollableFrame(dialog, fg_color="transparent")
+        scroll_wrapper.pack(fill="both", expand=True, padx=4, pady=4)
         
         plcs = self.config_manager.get().get("plcs", [])
         plc_data = plcs[edit_index] if is_edit and edit_index < len(plcs) else {}
         
         # Top Grid: Connection Settings
-        conn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
-        conn_frame.pack(fill="x", padx=20, pady=(15, 5))
+        conn_frame = ctk.CTkFrame(scroll_wrapper, fg_color="transparent")
+        conn_frame.pack(fill="x", padx=16, pady=(10, 5))
         conn_frame.grid_columnconfigure((0, 1), weight=1)
         
         ctk.CTkLabel(conn_frame, text="Line / PLC Name:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", pady=(0, 2))
@@ -147,7 +190,7 @@ class PLCManagerView(ctk.CTkFrame):
         ftp_mode_menu.grid(row=5, column=1, sticky="ew", pady=(0, 8))
 
         # Test Connection button
-        test_status_lbl = ctk.CTkLabel(dialog, text="", font=ctk.CTkFont(size=11))
+        test_status_lbl = ctk.CTkLabel(scroll_wrapper, text="", font=ctk.CTkFont(size=11))
         
         def do_test():
             h = host_entry.get().strip()
@@ -169,12 +212,12 @@ class PLCManagerView(ctk.CTkFrame):
         test_status_lbl.pack(padx=20, pady=(0, 5))
 
         # Machines Section
-        m_section_header = ctk.CTkFrame(dialog, fg_color="transparent")
+        m_section_header = ctk.CTkFrame(scroll_wrapper, fg_color="transparent")
         m_section_header.pack(fill="x", padx=20, pady=(5, 2))
         
         ctk.CTkLabel(m_section_header, text="🏭 Machines / Stations in this Line:", font=ctk.CTkFont(size=15, weight="bold")).pack(side="left")
         
-        machines_container = ctk.CTkScrollableFrame(dialog, height=220, label_text="Machine Name & Remote FTP Directory")
+        machines_container = ctk.CTkScrollableFrame(scroll_wrapper, height=220, label_text="Machine Name & Remote FTP Directory")
         machines_container.pack(fill="both", expand=True, padx=20, pady=5)
         
         # Rows list
@@ -238,11 +281,11 @@ class PLCManagerView(ctk.CTkFrame):
             add_machine_row("MC1", "/0_CARD/log0/")
 
         # Add Machine button
-        btn_add_m = ctk.CTkButton(dialog, text="➕ Add Another Machine", width=180, command=lambda: add_machine_row())
+        btn_add_m = ctk.CTkButton(scroll_wrapper, text="➕ Add Another Machine", width=180, command=lambda: add_machine_row())
         btn_add_m.pack(pady=5)
 
         # Date Filter Section
-        df_frame = ctk.CTkFrame(dialog, fg_color=("gray85", "gray17"), corner_radius=8)
+        df_frame = ctk.CTkFrame(scroll_wrapper, fg_color=("gray85", "gray17"), corner_radius=8)
         df_frame.pack(fill="x", padx=20, pady=(5, 10))
         
         ctk.CTkLabel(df_frame, text="📅 Download Date Filter (การเลือกไฟล์ดาวน์โหลด):", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=12, pady=(8, 4))
@@ -298,7 +341,7 @@ class PLCManagerView(ctk.CTkFrame):
         toggle_date_mode()
 
         # Bottom Save / Cancel
-        bottom_bar = ctk.CTkFrame(dialog, fg_color="transparent")
+        bottom_bar = ctk.CTkFrame(scroll_wrapper, fg_color="transparent")
         bottom_bar.pack(fill="x", padx=20, pady=(5, 15))
         
         def save():
