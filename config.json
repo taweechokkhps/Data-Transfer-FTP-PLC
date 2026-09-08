@@ -8,7 +8,6 @@
         "auto_pull_interval_minutes": 1,
         "auto_pull_enabled": true,
         "auto_pull_lines": [
-            "LINE 1",
             "REAL-PLC"
         ]
     },
@@ -23,7 +22,7 @@
             "machines": [
                 {
                     "name": "MC1 Connector Leak",
-                    "remote_dir": "/Documents/Projects/data_record/TEST/Data-TEST"
+                    "remote_dir": "/Documents/Projects/data_record/( \u0e08\u0e1a ) WB-S2409-0155 PROJECT TRACEABILITY QR CODE KANBAN/( \u0e08\u0e1a ) WB-S2409-0155 PROJECT TRACEABILITY QR CODE KANBAN/data 1234 ( \u0e40\u0e17\u0e2a )"
                 }
             ],
             "date_filter": {

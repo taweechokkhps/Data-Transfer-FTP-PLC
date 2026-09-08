@@ -3,6 +3,7 @@ import os
 import io
 import time
 import datetime
+import re
 from pathlib import Path
 from contextlib import redirect_stdout
 from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir, get_batch_subdirs
@@ -15,6 +16,10 @@ def test_connection(host: str, port: int, username: str, password: str, timeout:
         ftp = ftplib.FTP()
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
+        try:
+            ftp.sendcmd('OPTS UTF8 ON')
+        except Exception:
+            pass
         if ftp_mode == "active":
             ftp.set_pasv(False)
         ftp.quit()
@@ -24,89 +29,196 @@ def test_connection(host: str, port: int, username: str, password: str, timeout:
             return False, "530 Not logged in (Username or Password incorrect)."
         return False, str(e)
 
-def list_remote_directories(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 10, ftp_mode: str = "auto") -> tuple[bool, list[str] | str]:
-    """List subdirectories in current_dir on remote FTP server."""
+def list_remote_items(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 10, ftp_mode: str = "auto") -> tuple[bool, dict | str]:
+    """
+    List both subdirectories and files in current_dir on remote FTP server.
+    Returns (True, {"folders": [...], "files": [{"name": ..., "size": ...}], "current_dir": clean_dir}) or (False, error_msg).
+    Supports MLSD (RFC 3659), LIST (DOS/Unix), NLST, UTF-8/CP874 negotiation, and auto-fallback between Passive/Active modes.
+    """
     clean_dir = sanitize_remote_path(current_dir)
     try:
         ftp = ftplib.FTP()
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
+        
+        # Enable UTF-8 if supported by server (RFC 2640 / Windows IIS)
+        try:
+            ftp.sendcmd('OPTS UTF8 ON')
+        except Exception:
+            pass
+
         if ftp_mode == "active":
             ftp.set_pasv(False)
-        
+
         # Try clean_dir and candidate fallbacks
         candidates = [clean_dir]
         stripped = re.sub(r'^[/\\]Users[/\\][^/\\]+', '', clean_dir, flags=re.IGNORECASE)
-        if stripped and stripped != clean_dir:
-            candidates.insert(0, stripped)
+        if stripped and stripped not in candidates:
+            candidates.append(stripped)
+        
+        rel = clean_dir.lstrip('/')
+        if rel and rel not in candidates:
+            candidates.append(rel)
+        if stripped:
+            rel_str = stripped.lstrip('/')
+            if rel_str and rel_str not in candidates:
+                candidates.append(rel_str)
+
         cwd_ok = False
+        last_cwd_err = None
         for c in candidates:
-            try:
-                ftp.cwd(c)
-                clean_dir = c
-                cwd_ok = True
+            for enc in [ftp.encoding, 'cp874', 'tis-620', 'latin-1']:
+                try:
+                    ftp.encoding = enc
+                    ftp.cwd(c)
+                    clean_dir = c
+                    cwd_ok = True
+                    break
+                except Exception as e:
+                    last_cwd_err = e
+            if cwd_ok:
                 break
+
+        if not cwd_ok:
+            try:
+                ftp.quit()
             except Exception:
                 pass
-        if not cwd_ok:
-            ftp.cwd(clean_dir)
-        
-        dir_names = []
-        lines = []
+            return False, f"Cannot open directory '{clean_dir}': {last_cwd_err}"
+
+        folders = []
+        files = []
+
+        # Strategy 1: MLSD (RFC 3659 standard - clean metadata if supported)
+        mlsd_worked = False
         try:
-            ftp.dir(lines.append)
-        except Exception as e:
-            if "502" in str(e) or "PASV" in str(e).upper():
-                ftp.set_pasv(False)
-                lines.clear()
-                ftp.dir(lines.append)
-            else:
-                raise
-        
-        for line in lines:
-            parts = line.split()
-            if not parts:
-                continue
-            # Windows/DOS format: "09-05-26  09:04AM       <DIR>          Documents"
-            if "<DIR>" in parts:
-                dir_idx = parts.index("<DIR>")
-                name = " ".join(parts[dir_idx + 1:])
-                if name not in [".", ".."]:
-                    dir_names.append(name)
-            # Unix format: "drwxr-xr-x ..."
-            elif parts[0].startswith('d'):
-                name = " ".join(parts[8:])
-                if name not in [".", ".."]:
-                    dir_names.append(name)
-                    
-        # Fallback: if dir parsing found nothing, try checking nlst items
-        if not dir_names:
+            for name, facts in ftp.mlsd():
+                if name in [".", ".."]:
+                    continue
+                ftype = facts.get("type", "").lower()
+                if ftype in ["dir", "pdir", "cdir"]:
+                    if ftype == "dir":
+                        folders.append(name)
+                else:
+                    sz = int(facts.get("size", 0))
+                    files.append({"name": name, "size": sz})
+            mlsd_worked = True
+        except Exception:
+            folders.clear()
+            files.clear()
+
+        # Strategy 2: ftp.dir (standard LIST with DOS / Unix parsing)
+        if not mlsd_worked:
+            lines = []
+            def _fetch_dir():
+                try:
+                    ftp.dir(lines.append)
+                except UnicodeError:
+                    for fb_enc in ['cp874', 'latin-1', 'tis-620']:
+                        try:
+                            ftp.encoding = fb_enc
+                            lines.clear()
+                            ftp.dir(lines.append)
+                            return
+                        except Exception:
+                            pass
+                    raise
+                except Exception as e:
+                    if "502" in str(e) or "PASV" in str(e).upper() or "TIMEOUT" in str(e).upper():
+                        ftp.set_pasv(False)
+                        lines.clear()
+                        try:
+                            ftp.dir(lines.append)
+                        except UnicodeError:
+                            for fb_enc in ['cp874', 'latin-1', 'tis-620']:
+                                try:
+                                    ftp.encoding = fb_enc
+                                    lines.clear()
+                                    ftp.dir(lines.append)
+                                    return
+                                except Exception:
+                                    pass
+                            raise
+                    else:
+                        raise
+
             try:
+                _fetch_dir()
+            except Exception as e:
+                try:
+                    ftp.quit()
+                except Exception:
+                    pass
+                return False, f"Failed to list directory contents: {e}"
+
+            for line in lines:
+                parts = line.split()
+                if not parts:
+                    continue
+                # DOS format: "05-14-25  10:00AM       <DIR>          MEMCARD"
+                # or:         "05-14-25  10:00AM               14520  DATA01.TXT"
+                if "<DIR>" in parts:
+                    dir_idx = parts.index("<DIR>")
+                    name = " ".join(parts[dir_idx + 1:])
+                    if name not in [".", ".."]:
+                        folders.append(name)
+                elif len(parts) >= 4 and parts[2].isdigit():
+                    size = int(parts[2])
+                    name = " ".join(parts[3:])
+                    if name not in [".", ".."]:
+                        files.append({"name": name, "size": size})
+                # Unix format: "drwxr-xr-x ..." or "-rw-r--r-- ..."
+                elif parts[0].startswith('d'):
+                    name = " ".join(parts[8:])
+                    if name not in [".", ".."]:
+                        folders.append(name)
+                elif parts[0].startswith('-'):
+                    name = " ".join(parts[8:])
+                    size = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
+                    if name not in [".", ".."]:
+                        files.append({"name": name, "size": size})
+
+        # Strategy 3: Fallback via nlst() if nothing was detected
+        if not folders and not files:
+            try:
+                nlst_items = []
                 try:
                     nlst_items = ftp.nlst()
                 except Exception as e:
                     if "502" in str(e) or "PASV" in str(e).upper():
                         ftp.set_pasv(False)
                         nlst_items = ftp.nlst()
-                    else:
-                        raise
-
                 for item in nlst_items:
                     if item in [".", ".."]:
                         continue
                     try:
                         ftp.cwd(f"{clean_dir.rstrip('/')}/{item}")
-                        dir_names.append(item)
+                        folders.append(item)
                         ftp.cwd(clean_dir)
                     except Exception:
-                        pass
+                        files.append({"name": item, "size": 0})
             except Exception:
                 pass
 
-        ftp.quit()
-        return True, sorted(dir_names)
+        try:
+            ftp.quit()
+        except Exception:
+            pass
+
+        return True, {
+            "current_dir": clean_dir,
+            "folders": sorted(folders, key=str.lower),
+            "files": sorted(files, key=lambda x: x["name"].lower())
+        }
     except Exception as e:
         return False, f"Failed to list directory: {e}"
+
+def list_remote_directories(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 10, ftp_mode: str = "auto") -> tuple[bool, list[str] | str]:
+    """Legacy helper returning only directory names for backward compatibility."""
+    ok, data = list_remote_items(host, port, username, password, current_dir, timeout=timeout, ftp_mode=ftp_mode)
+    if ok:
+        return True, data.get("folders", [])
+    return False, data
 
 class FTPDownloader:
     def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name, date_filter=None, ftp_mode="auto"):
@@ -146,6 +258,10 @@ class FTPDownloader:
             with redirect_stdout(debug_output):
                 self.ftp.connect(self.host, self.port, timeout=10)
                 self.ftp.login(self.username, self.password)
+                try:
+                    self.ftp.sendcmd('OPTS UTF8 ON')
+                except Exception:
+                    pass
                 if self.is_active_mode or self.ftp_mode == "active":
                     self.ftp.set_pasv(False)
             self.ftp.set_debuglevel(0)
@@ -214,11 +330,13 @@ class FTPDownloader:
                 candidates.append(rel)
         
         for cand in candidates:
-            try:
-                ftp.cwd(cand)
-                return True, cand
-            except Exception:
-                pass
+            for enc in [ftp.encoding, 'cp874', 'tis-620', 'latin-1']:
+                try:
+                    ftp.encoding = enc
+                    ftp.cwd(cand)
+                    return True, cand
+                except Exception:
+                    pass
         try:
             ftp.cwd(path)
             return True, path

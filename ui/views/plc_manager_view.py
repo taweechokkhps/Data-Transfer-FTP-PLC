@@ -3,6 +3,8 @@ from tkinter import filedialog
 import threading
 from core.ftp_service import test_connection
 from core.path_utils import sanitize_remote_path
+from core.logger import logger
+from ui.components.tooltip import ToolTip
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
 from ui.components.date_picker import DatePickerPopup, validate_date_range
 from ui.components.modal_utils import setup_modal_dialog
@@ -378,14 +380,21 @@ class PLCManagerView(ctk.CTkFrame):
                         dir_ent.insert(0, sel)
                     FTPBrowserDialog(dialog, h, p, u, pw, initial_dir=init_d, on_select_callback=on_dir_selected, ftp_mode=m)
                 else:
-                    dir_name = filedialog.askdirectory(title=f"Select Directory for {name_ent.get() or 'Machine'}")
-                    if dir_name:
-                        cleaned = sanitize_remote_path(dir_name)
-                        dir_ent.delete(0, "end")
-                        dir_ent.insert(0, cleaned)
+                    test_status_lbl.configure(text="⚠️ กรุณาระบุ IP Address ก่อนเปิดดูโฟลเดอร์บน PLC", text_color="#FFA726")
 
-            btn_browse_m = ctk.CTkButton(row_frame, text="🔍 Browse", width=80, height=30, command=browse_for_this_row)
+            btn_browse_m = ctk.CTkButton(
+                row_frame, 
+                text="🌐 Browse PLC", 
+                width=105, 
+                height=30, 
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=("#673AB7", "#5E35B1"),
+                hover_color=("#512DA8", "#4527A0"),
+                text_color="white",
+                command=browse_for_this_row
+            )
             btn_browse_m.pack(side="left", padx=(0, 6), pady=6)
+            ToolTip(btn_browse_m, "เชื่อมต่อไปยัง PLC เพื่อเลือกโฟลเดอร์ปลายทางโดยตรง (ไม่ต้องเปิด WinSCP)")
             
             # Delete button
             def delete_this_row():
