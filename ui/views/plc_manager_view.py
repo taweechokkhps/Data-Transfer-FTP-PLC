@@ -16,72 +16,197 @@ class PLCManagerView(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
         
-        header = ctk.CTkLabel(self, text="Production Line & PLC Manager", font=ctk.CTkFont(size=24, weight="bold"))
-        header.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        # 1. Top Header Toolbar
+        header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        header_frame.grid(row=0, column=0, padx=16, pady=(12, 8), sticky="ew")
+        header_frame.grid_columnconfigure(0, weight=1)
+
+        title_box = ctk.CTkFrame(header_frame, fg_color="transparent")
+        title_box.grid(row=0, column=0, sticky="w")
         
-        self.plc_list_frame = ctk.CTkScrollableFrame(self)
-        self.plc_list_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        header_title = ctk.CTkLabel(
+            title_box, 
+            text="Production Line & PLC Manager", 
+            font=ctk.CTkFont(size=22, weight="bold")
+        )
+        header_title.pack(anchor="w")
+
+        self.summary_badge = ctk.CTkLabel(
+            title_box, 
+            text="", 
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        self.summary_badge.pack(anchor="w", pady=(2, 0))
+
+        add_btn = ctk.CTkButton(
+            header_frame, 
+            text="➕ Add New Line / PLC", 
+            font=ctk.CTkFont(size=13, weight="bold"), 
+            height=36,
+            command=self.open_plc_dialog
+        )
+        add_btn.grid(row=0, column=1, sticky="e")
         
-        add_btn = ctk.CTkButton(self, text="➕ Add New Line / PLC", font=ctk.CTkFont(weight="bold"), command=self.open_plc_dialog)
-        add_btn.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        # 2. Scrollable List Frame
+        self.plc_list_frame = ctk.CTkScrollableFrame(self, corner_radius=10)
+        self.plc_list_frame.grid(row=1, column=0, padx=16, pady=(0, 12), sticky="nsew")
         
         self.refresh_list()
 
     def refresh_list(self):
         for w in self.plc_list_frame.winfo_children():
             w.destroy()
-            
-        header_frame = ctk.CTkFrame(self.plc_list_frame, fg_color="transparent")
-        header_frame.pack(fill="x", padx=5, pady=(5, 0))
-        header_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
-        header_frame.grid_columnconfigure(5, weight=0, minsize=140)
-        
-        headers = ["Line Name", "Host:Port", "Username", "Configured Machines", "Date Filter", "Actions"]
-        for col, text in enumerate(headers):
-            anchor = "e" if col == 5 else "w"
-            ctk.CTkLabel(header_frame, text=text, font=ctk.CTkFont(weight="bold")).grid(row=0, column=col, padx=10, pady=5, sticky=anchor)
-            
-        sep = ctk.CTkFrame(self.plc_list_frame, height=2, fg_color=("gray70", "gray30"))
-        sep.pack(fill="x", padx=5, pady=(0, 5))
-        
+
         plcs = self.config_manager.get().get("plcs", [])
+        self.summary_badge.configure(text=f"จัดการข้อมูลสายการผลิตและตู้ PLC ({len(plcs)} Line(s) configured)")
+
+        if not plcs:
+            empty_frame = ctk.CTkFrame(self.plc_list_frame, fg_color="transparent")
+            empty_frame.pack(fill="x", pady=60)
+            ctk.CTkLabel(
+                empty_frame,
+                text="ยังไม่มีสายการผลิต / ตู้ PLC ในระบบ (No Lines Added)\nคลิกปุ่ม '➕ Add New Line / PLC' ด้านบนเพื่อเพิ่มเครื่องแรก",
+                font=ctk.CTkFont(size=14),
+                text_color="gray"
+            ).pack()
+            return
+
         for i, plc in enumerate(plcs):
-            frame = ctk.CTkFrame(self.plc_list_frame)
-            frame.pack(fill="x", padx=5, pady=2)
-            frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
-            frame.grid_columnconfigure(5, weight=0, minsize=140)
-            
-            ctk.CTkLabel(frame, text=plc.get('name', ''), font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, padx=10, pady=10, sticky="w")
-            ctk.CTkLabel(frame, text=f"{plc.get('host', '')}:{plc.get('port', 21)}").grid(row=0, column=1, padx=10, pady=10, sticky="w")
-            ctk.CTkLabel(frame, text=plc.get('username', '')).grid(row=0, column=2, padx=10, pady=10, sticky="w")
-            
-            machines = plc.get('machines', [])
-            if machines:
-                m_names = [m.get('name', 'MC') for m in machines]
-                m_summary = f"{len(machines)} MC: " + ", ".join(m_names)
-            else:
-                m_summary = "1 MC: (Default)"
-                
-            if len(m_summary) > 28:
-                m_summary = m_summary[:25] + "..."
-            ctk.CTkLabel(frame, text=m_summary).grid(row=0, column=3, padx=10, pady=10, sticky="w")
-            
-            # Date filter summary
+            # Card Container
+            card = ctk.CTkFrame(self.plc_list_frame, corner_radius=10, fg_color=("#F5F5F5", "#212121"))
+            card.pack(fill="x", padx=4, pady=6)
+            card.grid_columnconfigure(0, weight=1)
+
+            # TOP ROW: Line Name, IP info, Date Badge, Action Buttons
+            top_row = ctk.CTkFrame(card, fg_color="transparent")
+            top_row.grid(row=0, column=0, padx=16, pady=(12, 6), sticky="ew")
+            top_row.grid_columnconfigure(0, weight=1)
+
+            # Left: Name & Connection info
+            info_frame = ctk.CTkFrame(top_row, fg_color="transparent")
+            info_frame.grid(row=0, column=0, sticky="w")
+
+            line_title = ctk.CTkLabel(
+                info_frame,
+                text=plc.get("name", f"LINE {i+1}"),
+                font=ctk.CTkFont(size=16, weight="bold")
+            )
+            line_title.pack(anchor="w")
+
+            conn_sub = f"🌐 {plc.get('host', '')}:{plc.get('port', 21)}  •  User: {plc.get('username', 'ftp')}  •  Mode: {plc.get('ftp_mode', 'auto').upper()}"
+            ctk.CTkLabel(
+                info_frame,
+                text=conn_sub,
+                font=ctk.CTkFont(size=11),
+                text_color=("#666666", "#9E9E9E")
+            ).pack(anchor="w", pady=(2, 0))
+
+            # Right: Date badge + Edit/Delete buttons
+            actions_frame = ctk.CTkFrame(top_row, fg_color="transparent")
+            actions_frame.grid(row=0, column=1, sticky="e")
+
+            # Date Filter Badge
             df = plc.get("date_filter", {})
             if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
-                df_label = f"📅 {df['start_date']} - {df['end_date']}"
+                df_badge = f"📅 {df['start_date']} ➔ {df['end_date']}"
+                badge_fg = ("#EDE7F6", "#311B92")
+                badge_text = ("#311B92", "#EDE7F6")
             else:
-                df_label = "📅 All Files"
-            ctk.CTkLabel(frame, text=df_label, text_color=("#4A148C", "#CE93D8"), font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=4, padx=10, pady=10, sticky="w")
+                df_badge = "📅 All Files"
+                badge_fg = ("#E0E0E0", "#2D2D2D")
+                badge_text = ("#424242", "#BDBDBD")
 
-            btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-            btn_frame.grid(row=0, column=5, padx=10, pady=5, sticky="e")
-            
-            edit_btn = ctk.CTkButton(btn_frame, text="Edit", width=60, command=lambda idx=i: self.open_plc_dialog(idx))
-            edit_btn.pack(side="left", padx=(0, 5))
-            
-            del_btn = ctk.CTkButton(btn_frame, text="Delete", fg_color="#d32f2f", hover_color="#b71c1c", width=60, command=lambda idx=i: self.delete_plc(idx))
+            date_chip = ctk.CTkLabel(
+                actions_frame,
+                text=df_badge,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=badge_fg,
+                text_color=badge_text,
+                corner_radius=6,
+                padx=10,
+                pady=4
+            )
+            date_chip.pack(side="left", padx=(0, 10))
+
+            edit_btn = ctk.CTkButton(
+                actions_frame,
+                text="✏️ Edit",
+                width=65,
+                height=30,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color=("#E0E0E0", "#333333"),
+                hover_color=("#D5D5D5", "#444444"),
+                text_color=("#212121", "#FFFFFF"),
+                command=lambda idx=i: self.open_plc_dialog(idx)
+            )
+            edit_btn.pack(side="left", padx=(0, 6))
+
+            del_btn = ctk.CTkButton(
+                actions_frame,
+                text="🗑️ Delete",
+                width=70,
+                height=30,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#D32F2F",
+                hover_color="#B71C1C",
+                text_color="white",
+                command=lambda idx=i: self.delete_plc(idx)
+            )
             del_btn.pack(side="left")
+
+            # DIVIDER
+            divider = ctk.CTkFrame(card, height=1, fg_color=("#E0E0E0", "#333333"))
+            divider.grid(row=1, column=0, padx=16, pady=4, sticky="ew")
+
+            # BOTTOM ROW: Machines Container (Neat Chips / Badges Grid)
+            machines = plc.get("machines", [])
+            if not machines:
+                r_dirs_raw = plc.get("remote_directory", "")
+                m_list = [d.strip() for d in r_dirs_raw.split(",") if d.strip()]
+                if m_list:
+                    machines = [{"name": f"MC{idx+1}", "remote_dir": d} for idx, d in enumerate(m_list)]
+                else:
+                    machines = [{"name": "MC1 (Default)", "remote_dir": "/"}]
+
+            mc_section = ctk.CTkFrame(card, fg_color="transparent")
+            mc_section.grid(row=2, column=0, padx=16, pady=(4, 12), sticky="ew")
+
+            mc_header = ctk.CTkLabel(
+                mc_section,
+                text=f"🏭 Configured Machines ({len(machines)}):",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color=("#666666", "#9E9E9E")
+            )
+            mc_header.pack(anchor="w", pady=(0, 4))
+
+            mc_grid = ctk.CTkFrame(mc_section, fg_color="transparent")
+            mc_grid.pack(fill="x")
+
+            # Render each machine as a clean pill/badge (up to 3 per row)
+            for mc_idx, mc in enumerate(machines):
+                row_idx = mc_idx // 3
+                col_idx = mc_idx % 3
+                mc_grid.grid_columnconfigure(col_idx, weight=1)
+
+                chip = ctk.CTkFrame(mc_grid, corner_radius=6, fg_color=("#EAEAEA", "#2A2A2A"))
+                chip.grid(row=row_idx, column=col_idx, padx=4, pady=3, sticky="ew")
+
+                mc_name_lbl = ctk.CTkLabel(
+                    chip,
+                    text=f"🖥️ {mc.get('name', f'MC{mc_idx+1}')}",
+                    font=ctk.CTkFont(size=11, weight="bold")
+                )
+                mc_name_lbl.pack(side="left", padx=(8, 6), pady=4)
+
+                path_text = mc.get('remote_dir', '/')
+                mc_path_lbl = ctk.CTkLabel(
+                    chip,
+                    text=f"📂 {path_text}",
+                    font=ctk.CTkFont(size=10),
+                    text_color=("#666666", "#9E9E9E")
+                )
+                mc_path_lbl.pack(side="left", padx=(0, 8), pady=4)
 
     def delete_plc(self, index):
         plcs = self.config_manager.get().get("plcs", [])
@@ -220,18 +345,30 @@ class PLCManagerView(ctk.CTkFrame):
         machine_rows = []
 
         def add_machine_row(name="", remote_dir=""):
-            row_frame = ctk.CTkFrame(machines_container)
-            row_frame.pack(fill="x", padx=5, pady=4)
+            row_idx = len(machine_rows) + 1
+            row_frame = ctk.CTkFrame(machines_container, corner_radius=8, fg_color=("#F5F5F5", "#242424"))
+            row_frame.pack(fill="x", padx=4, pady=4)
             
+            # Number badge
+            badge_lbl = ctk.CTkLabel(
+                row_frame, 
+                text=f"#{row_idx}", 
+                width=32, 
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color=("#E0E0E0", "#333333"),
+                corner_radius=6
+            )
+            badge_lbl.pack(side="left", padx=(8, 6), pady=6)
+
             # Machine name entry
-            name_ent = ctk.CTkEntry(row_frame, width=180, placeholder_text="e.g. MC1 Leak Test")
-            name_ent.insert(0, name if name else f"MC{len(machine_rows)+1}")
-            name_ent.pack(side="left", padx=(5, 5), pady=5)
+            name_ent = ctk.CTkEntry(row_frame, width=170, placeholder_text="Station / MC Name")
+            name_ent.insert(0, name if name else f"MC{row_idx}")
+            name_ent.pack(side="left", padx=(0, 6), pady=6)
             
             # Remote dir entry
-            dir_ent = ctk.CTkEntry(row_frame, width=220, placeholder_text="/0_CARD/log0/")
+            dir_ent = ctk.CTkEntry(row_frame, placeholder_text="Remote FTP Directory (e.g. /0_CARD/log0/)")
             dir_ent.insert(0, remote_dir if remote_dir else "/")
-            dir_ent.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+            dir_ent.pack(side="left", fill="x", expand=True, padx=(0, 6), pady=6)
             
             # Browse button for this specific machine
             def browse_for_this_row():
@@ -253,19 +390,29 @@ class PLCManagerView(ctk.CTkFrame):
                         dir_ent.delete(0, "end")
                         dir_ent.insert(0, cleaned)
 
-            btn_browse_m = ctk.CTkButton(row_frame, text="Browse", width=75, command=browse_for_this_row)
-            btn_browse_m.pack(side="left", padx=5, pady=5)
+            btn_browse_m = ctk.CTkButton(row_frame, text="🔍 Browse", width=80, height=30, command=browse_for_this_row)
+            btn_browse_m.pack(side="left", padx=(0, 6), pady=6)
             
             # Delete button
             def delete_this_row():
                 if len(machine_rows) > 1:
                     row_frame.destroy()
                     machine_rows.remove(row_data)
+                    for idx, r in enumerate(machine_rows):
+                        r["badge_lbl"].configure(text=f"#{idx+1}")
                     
-            btn_del_m = ctk.CTkButton(row_frame, text="✕", width=30, fg_color="#d32f2f", hover_color="#b71c1c", command=delete_this_row)
-            btn_del_m.pack(side="left", padx=(0, 5), pady=5)
+            btn_del_m = ctk.CTkButton(
+                row_frame, 
+                text="✕", 
+                width=30, 
+                height=30, 
+                fg_color="#D32F2F", 
+                hover_color="#B71C1C", 
+                command=delete_this_row
+            )
+            btn_del_m.pack(side="left", padx=(0, 8), pady=6)
             
-            row_data = {"frame": row_frame, "name_entry": name_ent, "dir_entry": dir_ent}
+            row_data = {"frame": row_frame, "name_entry": name_ent, "dir_entry": dir_ent, "badge_lbl": badge_lbl}
             machine_rows.append(row_data)
 
         # Populate initial machines (Default to 1 machine)
