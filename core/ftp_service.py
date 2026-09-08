@@ -220,6 +220,14 @@ def list_remote_directories(host: str, port: int, username: str, password: str, 
         return True, data.get("folders", [])
     return False, data
 
+def _emit_log(callback, message: str, level: str = "info"):
+    if not callback:
+        return
+    try:
+        callback(message, level)
+    except TypeError:
+        callback(message)
+
 class FTPDownloader:
     def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name, date_filter=None, ftp_mode="auto"):
         self.host = host
@@ -269,7 +277,7 @@ class FTPDownloader:
         except Exception as e:
             debug_log = debug_output.getvalue()
             if log_callback and debug_log:
-                log_callback(f"[{self.plc_name}] --- FTP Debug Log Start ---\n{debug_log}[{self.plc_name}] --- FTP Debug Log End ---")
+                _emit_log(log_callback, f"[{self.plc_name}] --- FTP Debug Log Start ---\n{debug_log}[{self.plc_name}] --- FTP Debug Log End ---", "warning")
             if '530' in str(e):
                 return False, f"Connection failed: 530 Not logged in. (Username or Password incorrect)"
             return False, f"Connection failed: {e}"
@@ -281,9 +289,8 @@ class FTPDownloader:
         except Exception as e:
             err_str = str(e)
             if "502" in err_str or "PASV" in err_str.upper():
-                if log_callback:
-                    log_callback(f"[{self.plc_name}] Notice: 502 PASV not implemented by PLC. Automatically switching to Active (PORT) mode.")
-                logger.info(f"[{self.plc_name}] Switching to Active (PORT) mode due to 502 PASV error.")
+                _emit_log(log_callback, f"[{self.plc_name}] Notice: 502 PASV not implemented by PLC. Automatically switching to Active (PORT) mode.", "switch_mode")
+                logger.switch_mode(f"[{self.plc_name}] Switching to Active (PORT) mode due to 502 PASV error.")
                 self.ftp.set_pasv(False)
                 self.is_active_mode = True
                 return self.ftp.nlst()
@@ -296,9 +303,8 @@ class FTPDownloader:
         except Exception as e:
             err_str = str(e)
             if "502" in err_str or "PASV" in err_str.upper():
-                if log_callback:
-                    log_callback(f"[{self.plc_name}] Notice: 502 PASV not implemented by PLC. Automatically switching to Active (PORT) mode.")
-                logger.info(f"[{self.plc_name}] Switching to Active (PORT) mode due to 502 PASV error.")
+                _emit_log(log_callback, f"[{self.plc_name}] Notice: 502 PASV not implemented by PLC. Automatically switching to Active (PORT) mode.", "switch_mode")
+                logger.switch_mode(f"[{self.plc_name}] Switching to Active (PORT) mode due to 502 PASV error.")
                 self.ftp.set_pasv(False)
                 self.is_active_mode = True
                 return self.ftp.retrbinary(cmd, callback)
@@ -348,8 +354,7 @@ class FTPDownloader:
         self.is_running = True
         success, msg = self.connect(log_callback)
         if not success:
-            if log_callback:
-                log_callback(f"[{self.plc_name}] {msg}")
+            _emit_log(log_callback, f"[{self.plc_name}] {msg}", "error")
             self.is_running = False
             return False
 
@@ -367,8 +372,7 @@ class FTPDownloader:
                     if start_date > end_date:
                         start_date, end_date = end_date, start_date
                 except Exception as e:
-                    if log_callback:
-                        log_callback(f"[{self.plc_name}] Invalid date format ({start_str} - {end_str}): {e}")
+                    _emit_log(log_callback, f"[{self.plc_name}] Invalid date format ({start_str} - {end_str}): {e}", "warning")
 
             files_by_machine = {}
             total_target_files = []
@@ -378,8 +382,7 @@ class FTPDownloader:
                 r_dir = m["remote_dir"]
                 ok, actual_dir = self._try_cwd(self.ftp, r_dir)
                 if not ok:
-                    if log_callback:
-                        log_callback(f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {actual_dir}")
+                    _emit_log(log_callback, f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {actual_dir}", "error")
                     continue
                 try:
                     files = self._safe_nlst(log_callback=log_callback)
@@ -410,15 +413,13 @@ class FTPDownloader:
                     files_by_machine[m["name"]] = (actual_dir, t_files, batch_folder_name)
                     total_target_files.extend(t_files)
                 except Exception as e:
-                    if log_callback:
-                        log_callback(f"[{self.plc_name}] Error listing {m['name']} ({actual_dir}): {e}")
+                    _emit_log(log_callback, f"[{self.plc_name}] Error listing {m['name']} ({actual_dir}): {e}", "error")
 
             if not total_target_files:
-                if log_callback:
-                    if mode == "range" and start_date and end_date:
-                        log_callback(f"[{self.plc_name}] No matching files found in date range {start_str} - {end_str}.")
-                    else:
-                        log_callback(f"[{self.plc_name}] No matching files found in any machine directory.")
+                if mode == "range" and start_date and end_date:
+                    _emit_log(log_callback, f"[{self.plc_name}] No matching files found in date range {start_str} - {end_str}.", "warning")
+                else:
+                    _emit_log(log_callback, f"[{self.plc_name}] No matching files found in any machine directory.", "warning")
                 self.disconnect()
                 self.is_running = False
                 return True
@@ -438,8 +439,7 @@ class FTPDownloader:
 
                 for filename in t_files:
                     if not self.is_running:
-                        if log_callback:
-                            log_callback(f"[{self.plc_name}] Download stopped by user.")
+                        _emit_log(log_callback, f"[{self.plc_name}] Download stopped by user.", "warning")
                         break
 
                     pure_filename = Path(filename).name
@@ -478,26 +478,22 @@ class FTPDownloader:
                             self._safe_retrbinary(f"RETR {filename}", f.write, log_callback=log_callback)
                         f_dur_ms = (time.perf_counter() - f_start) * 1000
                         f_size_kb = local_filepath.stat().st_size / 1024
-                        if log_callback:
-                            log_callback(f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms")
+                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms", "success")
 
                         # Auto convert to CSV
                         conv_start = time.perf_counter()
                         ok_conv, conv_err, row_count = convert_txt_to_csv(local_filepath, csv_filepath)
                         conv_ms = (time.perf_counter() - conv_start) * 1000
                         if ok_conv:
-                            if log_callback:
-                                log_callback(f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filename} ({row_count} rows) in {conv_ms:.1f} ms")
+                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filename} ({row_count} rows) in {conv_ms:.1f} ms", "success")
                         else:
-                            if log_callback:
-                                log_callback(f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}")
+                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}", "warning")
 
                         current_index += 1
                         if progress_callback:
                             progress_callback(current_index, total_files)
                     except Exception as e:
-                        if log_callback:
-                            log_callback(f"[{self.plc_name}][{m_name}] Error downloading {filename}: {e}")
+                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Error downloading {filename}: {e}", "error")
 
             elapsed = time.time() - start_time
             total_ms = elapsed * 1000
@@ -506,11 +502,9 @@ class FTPDownloader:
                 dur_str = f"{mins:02d}:{secs:02d} ({total_ms:,.0f} ms)"
             else:
                 dur_str = f"{elapsed:.3f}s ({total_ms:,.0f} ms)"
-            if log_callback:
-                log_callback(f"[{self.plc_name}] Download process completed in {dur_str} ({current_index}/{total_files} files).")
+            _emit_log(log_callback, f"[{self.plc_name}] Download process completed in {dur_str} ({current_index}/{total_files} files).", "success")
         except Exception as e:
-            if log_callback:
-                log_callback(f"[{self.plc_name}] FTP Error: {e}")
+            _emit_log(log_callback, f"[{self.plc_name}] FTP Error: {e}", "error")
         finally:
             self.disconnect()
             self.is_running = False

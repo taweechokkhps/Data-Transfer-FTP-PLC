@@ -430,8 +430,8 @@ class DashboardView(ctk.CTkFrame):
             if counter_label:
                 self.after(0, lambda: counter_label.configure(text=f"{current} / {total} files ({pct}%)"))
 
-        def log_cb(msg):
-            self.after(0, lambda: logger.info(msg))
+        def log_cb(msg, level=None):
+            self.after(0, lambda: logger.log(msg, level=level))
 
         def run():
             self.after(0, lambda: status_label.configure(text="● Connecting...", text_color="#FFA726"))
