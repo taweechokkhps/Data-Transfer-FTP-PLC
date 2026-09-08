@@ -329,16 +329,30 @@ class FTPDownloader:
                     csv_filename = f"{Path(pure_filename).stem}.csv"
                     csv_filepath = csv_dir / csv_filename
 
-                    # Incremental check: if plaintext file exists with identical size and csv exists, skip
-                    try:
-                        remote_size = self.ftp.size(filename)
-                        if local_filepath.exists() and csv_filepath.exists() and remote_size and local_filepath.stat().st_size == remote_size:
+                    # High-Performance Smart Check (Local-First + Past-File Fast-Skip)
+                    # 1. Local-First: Check if both plaintext and csv already exist on our disk
+                    if local_filepath.exists() and csv_filepath.exists():
+                        f_date = parse_date_from_filename(pure_filename)
+                        today = datetime.date.today()
+
+                        # Case A: If file is from a past date, PLC never writes to it again -> Skip instantly (0 network requests)
+                        if f_date and f_date < today:
                             current_index += 1
                             if progress_callback:
                                 progress_callback(current_index, total_files)
                             continue
-                    except Exception:
-                        pass
+
+                        # Case B: If file is today's file (or date cannot be determined), query PLC for size
+                        try:
+                            remote_size = self.ftp.size(filename)
+                            if remote_size and local_filepath.stat().st_size == remote_size:
+                                current_index += 1
+                                if progress_callback:
+                                    progress_callback(current_index, total_files)
+                                continue
+                        except Exception:
+                            # If size query fails on PLC, proceed to download to ensure integrity
+                            pass
 
                     try:
                         f_start = time.perf_counter()
