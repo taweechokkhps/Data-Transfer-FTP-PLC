@@ -3,13 +3,13 @@ import threading
 from core.ftp_service import list_remote_directories
 from core.path_utils import sanitize_remote_path
 
+from ui.components.modal_utils import setup_modal_dialog
+
 class FTPBrowserDialog(ctk.CTkToplevel):
     def __init__(self, parent, host, port, username, password, initial_dir="/", on_select_callback=None, ftp_mode="auto"):
         super().__init__(parent)
         self.title("📁 Browse Remote FTP Directories")
-        self.geometry("520x480")
-        self.minsize(450, 350)
-        self.grab_set()
+        setup_modal_dialog(self, parent, target_width=540, target_height=500, resizable=True, min_width=450, min_height=350)
 
         self.host = host
         self.port = port

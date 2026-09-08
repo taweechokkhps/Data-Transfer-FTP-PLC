@@ -5,6 +5,7 @@ from core.ftp_service import test_connection
 from core.path_utils import sanitize_remote_path
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
 from ui.components.date_picker import DatePickerPopup, validate_date_range
+from ui.components.modal_utils import setup_modal_dialog
 
 class PLCManagerView(ctk.CTkFrame):
     def __init__(self, master, config_manager, on_plc_list_updated=None, **kwargs):
@@ -88,10 +89,7 @@ class PLCManagerView(ctk.CTkFrame):
 
         confirm = ctk.CTkToplevel(self)
         confirm.title("Confirm Delete")
-        confirm.geometry("420x180")
-        confirm.resizable(False, False)
-        confirm.grab_set()
-        confirm.attributes("-topmost", True)
+        setup_modal_dialog(confirm, self, target_width=440, target_height=200, resizable=False)
 
         ctk.CTkLabel(
             confirm,
@@ -131,9 +129,7 @@ class PLCManagerView(ctk.CTkFrame):
         dialog = ctk.CTkToplevel(self)
         is_edit = edit_index is not None
         dialog.title("Edit Line / PLC" if is_edit else "Add New Line / PLC")
-        dialog.geometry("700x850")
-        dialog.minsize(650, 700)
-        dialog.grab_set()
+        setup_modal_dialog(dialog, self, target_width=720, target_height=780, resizable=True, min_width=580, min_height=480)
 
         # Scrollable content wrapper so everything fits even on small screens
         scroll_wrapper = ctk.CTkScrollableFrame(dialog, fg_color="transparent")

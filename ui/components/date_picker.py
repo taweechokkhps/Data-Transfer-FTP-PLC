@@ -5,6 +5,7 @@ from datetime import date, datetime
 import tkinter as tk
 from typing import Callable, Dict, Optional, Tuple
 import customtkinter as ctk
+from ui.components.modal_utils import setup_modal_dialog
 
 MONTH_NAMES_TH = [
     "",
@@ -126,28 +127,11 @@ class DatePickerPopup(ctk.CTkToplevel):
 
         self.today = today
 
-        # Make modal
-        self.transient(parent)
-        self.grab_set()
-
         # Build UI
         self._build_ui()
         self._render_calendar()
 
-        # Center on parent
-        self.update_idletasks()
-        try:
-            px = parent.winfo_rootx()
-            py = parent.winfo_rooty()
-            pw = parent.winfo_width()
-            ph = parent.winfo_height()
-            w = self.winfo_width()
-            h = self.winfo_height()
-            x = px + (pw - w) // 2
-            y = py + (ph - h) // 2
-            self.geometry(f"+{max(10, x)}+{max(10, y)}")
-        except Exception:
-            pass
+        setup_modal_dialog(self, parent, target_width=340, target_height=420, resizable=False)
 
     def _build_ui(self):
         # Header navigation frame
@@ -363,25 +347,8 @@ class QuickDateFilterDialog(ctk.CTkToplevel):
         self.start_date_var = tk.StringVar(value=cur.get("start_date", ""))
         self.end_date_var = tk.StringVar(value=cur.get("end_date", ""))
 
-        self.transient(parent)
-        self.grab_set()
-
         self._build_ui()
-
-        # Center on parent
-        self.update_idletasks()
-        try:
-            px = parent.winfo_rootx()
-            py = parent.winfo_rooty()
-            pw = parent.winfo_width()
-            ph = parent.winfo_height()
-            w = self.winfo_width()
-            h = self.winfo_height()
-            x = px + (pw - w) // 2
-            y = py + (ph - h) // 2
-            self.geometry(f"+{max(10, x)}+{max(10, y)}")
-        except Exception:
-            pass
+        setup_modal_dialog(self, parent, target_width=440, target_height=260, resizable=False)
 
     def _build_ui(self):
         container = ctk.CTkFrame(self, fg_color="transparent")
