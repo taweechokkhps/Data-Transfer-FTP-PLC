@@ -437,40 +437,60 @@ class FTPDownloader:
                 if not ok:
                     continue
 
+                # High-Performance Smart Check (Partition into skipped vs to_download)
+                today = datetime.date.today()
+                skipped_files = []
+                to_download = []
+
                 for filename in t_files:
                     if not self.is_running:
-                        _emit_log(log_callback, f"[{self.plc_name}] Download stopped by user.", "warning")
                         break
-
                     pure_filename = Path(filename).name
                     local_filepath = plaintext_dir / pure_filename
                     csv_filename = f"{Path(pure_filename).stem}.csv"
                     csv_filepath = csv_dir / csv_filename
 
-                    # High-Performance Smart Check (Local-First + Past-File Fast-Skip)
-                    # 1. Local-First: Check if both plaintext and csv already exist on our disk
+                    is_duplicate = False
                     if local_filepath.exists() and csv_filepath.exists():
                         f_date = parse_date_from_filename(pure_filename)
-                        today = datetime.date.today()
-
-                        # Case A: If file is from a past date, PLC never writes to it again -> Skip instantly (0 network requests)
                         if f_date and f_date < today:
-                            current_index += 1
-                            if progress_callback:
-                                progress_callback(current_index, total_files)
-                            continue
+                            # Past file: PLC never writes to it again -> instant skip
+                            is_duplicate = True
+                        else:
+                            # Today's file or unknown date: check remote size vs local size
+                            try:
+                                remote_size = self.ftp.size(filename)
+                                if remote_size and local_filepath.stat().st_size == remote_size:
+                                    is_duplicate = True
+                            except Exception:
+                                is_duplicate = False
 
-                        # Case B: If file is today's file (or date cannot be determined), query PLC for size
-                        try:
-                            remote_size = self.ftp.size(filename)
-                            if remote_size and local_filepath.stat().st_size == remote_size:
-                                current_index += 1
-                                if progress_callback:
-                                    progress_callback(current_index, total_files)
-                                continue
-                        except Exception:
-                            # If size query fails on PLC, proceed to download to ensure integrity
-                            pass
+                    if is_duplicate:
+                        skipped_files.append((filename, pure_filename, local_filepath, csv_filepath))
+                    else:
+                        to_download.append((filename, pure_filename, local_filepath, csv_filepath))
+
+                if not self.is_running:
+                    _emit_log(log_callback, f"[{self.plc_name}] Download stopped by user.", "warning")
+                    break
+
+                # Emit duplicate file summary log
+                if skipped_files:
+                    if not to_download:
+                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ไฟล์ทั้งหมดมีอยู่แล้วในเครื่อง (ซ้ำ {len(skipped_files)} ไฟล์ - ข้ามการดาวน์โหลด)", "info")
+                    else:
+                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ตรวจพบไฟล์ซ้ำ {len(skipped_files)} ไฟล์ (ข้ามการดาวน์โหลด)", "info")
+                    current_index += len(skipped_files)
+                    if progress_callback:
+                        progress_callback(current_index, total_files)
+
+                # Process downloads for new/updated files
+                for filename, pure_filename, local_filepath, csv_filepath in to_download:
+                    if not self.is_running:
+                        _emit_log(log_callback, f"[{self.plc_name}] Download stopped by user.", "warning")
+                        break
+
+                    _emit_log(log_callback, f"[{self.plc_name}][{m_name}] กำลังดาวน์โหลด: {pure_filename}", "info")
 
                     try:
                         f_start = time.perf_counter()
@@ -485,7 +505,7 @@ class FTPDownloader:
                         ok_conv, conv_err, row_count = convert_txt_to_csv(local_filepath, csv_filepath)
                         conv_ms = (time.perf_counter() - conv_start) * 1000
                         if ok_conv:
-                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filename} ({row_count} rows) in {conv_ms:.1f} ms", "success")
+                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filepath.name} ({row_count} rows) in {conv_ms:.1f} ms", "success")
                         else:
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}", "warning")
 
