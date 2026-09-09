@@ -480,14 +480,13 @@ class FTPDownloader:
                     if local_filepath.exists() and csv_filepath.exists():
                         f_date = parse_date_from_filename(pure_filename)
                         if f_date and f_date < today:
-                            # Past file: PLC never writes to it again -> instant skip
+                            # Past file: Already complete and closed, PLC never writes to it again -> instant skip
                             is_duplicate = True
                         else:
-                            # Safe Industrial Check: Avoid sending SIZE command to Omron CJ2M
-                            # because querying remote size locks the CompactFlash card and starves FINS comms.
-                            # If local file already exists and is non-empty, treat as existing.
-                            if local_filepath.stat().st_size > 0:
-                                is_duplicate = True
+                            # Today's file (f_date == today) or active file:
+                            # The machine is actively running today! Production data is continuously appended.
+                            # We MUST NOT skip today's file, so afternoon/evening records are always updated.
+                            is_duplicate = False
 
                     if is_duplicate:
                         skipped_files.append((filename, pure_filename, local_filepath, csv_filepath))
@@ -516,34 +515,43 @@ class FTPDownloader:
 
                     _emit_log(log_callback, f"[{self.plc_name}][{m_name}] กำลังดาวน์โหลด: {pure_filename}", "info")
 
-                    try:
-                        f_start = time.perf_counter()
-                        with open(local_filepath, 'wb') as f:
-                            self._safe_retrbinary(f"RETR {filename}", f.write, log_callback=log_callback)
-                        f_dur_ms = (time.perf_counter() - f_start) * 1000
-                        f_size_kb = local_filepath.stat().st_size / 1024
-                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms", "success")
+                    max_retries = 2
+                    for attempt in range(max_retries):
+                        if not self.is_running:
+                            break
+                        try:
+                            f_start = time.perf_counter()
+                            with open(local_filepath, 'wb') as f:
+                                self._safe_retrbinary(f"RETR {filename}", f.write, log_callback=log_callback)
+                            f_dur_ms = (time.perf_counter() - f_start) * 1000
+                            f_size_kb = local_filepath.stat().st_size / 1024
+                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms", "success")
 
-                        # Auto convert to CSV
-                        conv_start = time.perf_counter()
-                        ok_conv, conv_err, row_count = convert_txt_to_csv(local_filepath, csv_filepath)
-                        conv_ms = (time.perf_counter() - conv_start) * 1000
-                        if ok_conv:
-                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filepath.name} ({row_count} rows) in {conv_ms:.1f} ms", "success")
-                        else:
-                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}", "warning")
+                            # Auto convert to CSV
+                            conv_start = time.perf_counter()
+                            ok_conv, conv_err, row_count = convert_txt_to_csv(local_filepath, csv_filepath)
+                            conv_ms = (time.perf_counter() - conv_start) * 1000
+                            if ok_conv:
+                                _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Converted to csv/{csv_filepath.name} ({row_count} rows) in {conv_ms:.1f} ms", "success")
+                            else:
+                                _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}", "warning")
 
-                        current_index += 1
-                        if progress_callback:
-                            progress_callback(current_index, total_files)
+                            current_index += 1
+                            if progress_callback:
+                                progress_callback(current_index, total_files)
 
-                        # Industrial Safe Pacing Delay (150ms):
-                        # Yields CPU and network time slice back to Omron CJ2M so Ladder logic and
-                        # HMI Heartbeat (FINS) run uninterrupted without triggering 'PLC NOT RESPONSE'.
-                        time.sleep(0.15)
-                    except Exception as e:
-                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ❌ Error downloading {filename}: {e}", "error")
-                        error_count += 1
+                            # Industrial Safe Pacing Delay (150ms):
+                            # Yields CPU and network time slice back to Omron CJ2M so Ladder logic and
+                            # HMI Heartbeat (FINS) run uninterrupted without triggering 'PLC NOT RESPONSE'.
+                            time.sleep(0.15)
+                            break
+                        except Exception as e:
+                            if attempt < max_retries - 1 and self.is_running:
+                                _emit_log(log_callback, f"[{self.plc_name}][{m_name}] PLC กำลังบันทึกข้อมูลอยู่ ({pure_filename}) จะลองใหม่ใน 1.5 วินาที...", "warning")
+                                time.sleep(1.5)
+                            else:
+                                _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ❌ Error downloading {filename}: {e}", "error")
+                                error_count += 1
 
             elapsed = time.time() - start_time
             total_ms = elapsed * 1000
