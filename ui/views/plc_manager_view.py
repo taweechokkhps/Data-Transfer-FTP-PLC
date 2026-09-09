@@ -159,33 +159,31 @@ class PLCManagerView(ctk.CTkFrame):
             )
             mc_header.pack(anchor="w", pady=(0, 4))
 
-            mc_grid = ctk.CTkFrame(mc_section, fg_color="transparent")
-            mc_grid.pack(fill="x")
+            mc_list = ctk.CTkFrame(mc_section, fg_color="transparent")
+            mc_list.pack(fill="x")
 
-            # Render each machine as a clean pill/badge (up to 3 per row)
+            # Render each machine on its own row (full-width)
             for mc_idx, mc in enumerate(machines):
-                row_idx = mc_idx // 3
-                col_idx = mc_idx % 3
-                mc_grid.grid_columnconfigure(col_idx, weight=1)
-
-                chip = ctk.CTkFrame(mc_grid, corner_radius=6, fg_color=("#EAEAEA", "#2A2A2A"))
-                chip.grid(row=row_idx, column=col_idx, padx=4, pady=3, sticky="ew")
+                row_frame = ctk.CTkFrame(mc_list, corner_radius=6, fg_color=("#EAEAEA", "#2A2A2A"))
+                row_frame.pack(fill="x", pady=2)
 
                 mc_name_lbl = ctk.CTkLabel(
-                    chip,
+                    row_frame,
                     text=f"🖥️ {mc.get('name', f'MC{mc_idx+1}')}",
-                    font=ctk.CTkFont(size=11, weight="bold")
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color=("#1565C0", "#64B5F6")
                 )
-                mc_name_lbl.pack(side="left", padx=(8, 6), pady=4)
+                mc_name_lbl.pack(side="left", padx=(10, 8), pady=4)
 
                 path_text = mc.get('remote_dir', '/')
                 mc_path_lbl = ctk.CTkLabel(
-                    chip,
+                    row_frame,
                     text=f"📂 {path_text}",
-                    font=ctk.CTkFont(size=10),
-                    text_color=("#666666", "#9E9E9E")
+                    font=ctk.CTkFont(size=11),
+                    text_color=("#555555", "#AAAAAA"),
+                    anchor="w"
                 )
-                mc_path_lbl.pack(side="left", padx=(0, 8), pady=4)
+                mc_path_lbl.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=4)
 
             # Date Filter info (informative label at the bottom, not looking like a button)
             df = plc.get("date_filter", {})
