@@ -1,4 +1,5 @@
 import ftplib
+import socket
 import os
 import io
 import time
@@ -10,26 +11,32 @@ from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_d
 from core.converter_service import convert_txt_to_csv
 from core.logger import logger
 
-def test_connection(host: str, port: int, username: str, password: str, timeout: int = 5, ftp_mode: str = "auto") -> tuple[bool, str]:
+def test_connection(host: str, port: int, username: str, password: str, timeout: int = 15, ftp_mode: str = "auto") -> tuple[bool, str]:
     """Test FTP connection and login."""
+    ftp = ftplib.FTP()
     try:
-        ftp = ftplib.FTP()
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
-        try:
-            ftp.sendcmd('OPTS UTF8 ON')
-        except Exception:
-            pass
-        if ftp_mode == "active":
+        mode = (ftp_mode or "auto").lower()
+        if mode == "active":
             ftp.set_pasv(False)
+        else:
+            try:
+                ftp.sendcmd('OPTS UTF8 ON')
+            except Exception:
+                pass
         ftp.quit()
         return True, "Connected successfully."
     except Exception as e:
+        try:
+            ftp.close()
+        except Exception:
+            pass
         if '530' in str(e):
             return False, "530 Not logged in (Username or Password incorrect)."
         return False, str(e)
 
-def list_remote_items(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 10, ftp_mode: str = "auto") -> tuple[bool, dict | str]:
+def list_remote_items(host: str, port: int, username: str, password: str, current_dir: str = "/", timeout: int = 30, ftp_mode: str = "auto") -> tuple[bool, dict | str]:
     """
     List both subdirectories and files in current_dir on remote FTP server.
     Returns (True, {"folders": [...], "files": [{"name": ..., "size": ...}], "current_dir": clean_dir}) or (False, error_msg).
@@ -41,14 +48,15 @@ def list_remote_items(host: str, port: int, username: str, password: str, curren
         ftp.connect(host, int(port), timeout=timeout)
         ftp.login(username, password)
         
-        # Enable UTF-8 if supported by server (RFC 2640 / Windows IIS)
-        try:
-            ftp.sendcmd('OPTS UTF8 ON')
-        except Exception:
-            pass
-
-        if ftp_mode == "active":
+        mode = (ftp_mode or "auto").lower()
+        if mode == "active":
             ftp.set_pasv(False)
+        else:
+            # Enable UTF-8 if supported by server (RFC 2640 / Windows IIS)
+            try:
+                ftp.sendcmd('OPTS UTF8 ON')
+            except Exception:
+                pass
 
         # Try clean_dir and candidate fallbacks
         candidates = [clean_dir]
@@ -264,17 +272,21 @@ class FTPDownloader:
             self.ftp = ftplib.FTP()
             self.ftp.set_debuglevel(1)
             with redirect_stdout(debug_output):
-                self.ftp.connect(self.host, self.port, timeout=10)
+                self.ftp.connect(self.host, self.port, timeout=60)
                 self.ftp.login(self.username, self.password)
-                try:
-                    self.ftp.sendcmd('OPTS UTF8 ON')
-                except Exception:
-                    pass
                 if self.is_active_mode or self.ftp_mode == "active":
                     self.ftp.set_pasv(False)
+                else:
+                    try:
+                        self.ftp.sendcmd('OPTS UTF8 ON')
+                    except Exception:
+                        pass
+                if hasattr(self.ftp, 'sock') and self.ftp.sock:
+                    self.ftp.sock.settimeout(60.0)
             self.ftp.set_debuglevel(0)
             return True, "Connected successfully."
         except Exception as e:
+            self.disconnect()
             debug_log = debug_output.getvalue()
             if log_callback and debug_log:
                 _emit_log(log_callback, f"[{self.plc_name}] --- FTP Debug Log Start ---\n{debug_log}[{self.plc_name}] --- FTP Debug Log End ---", "warning")
@@ -315,10 +327,21 @@ class FTPDownloader:
             try:
                 self.ftp.quit()
             except Exception:
-                try:
-                    self.ftp.close()
-                except Exception:
-                    pass
+                pass
+            try:
+                if hasattr(self.ftp, 'sock') and self.ftp.sock:
+                    self.ftp.sock.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            try:
+                if hasattr(self.ftp, 'sock') and self.ftp.sock:
+                    self.ftp.sock.close()
+            except Exception:
+                pass
+            try:
+                self.ftp.close()
+            except Exception:
+                pass
             self.ftp = None
 
     def _try_cwd(self, ftp, path: str) -> tuple[bool, str]:
@@ -460,13 +483,11 @@ class FTPDownloader:
                             # Past file: PLC never writes to it again -> instant skip
                             is_duplicate = True
                         else:
-                            # Today's file or unknown date: check remote size vs local size
-                            try:
-                                remote_size = self.ftp.size(filename)
-                                if remote_size and local_filepath.stat().st_size == remote_size:
-                                    is_duplicate = True
-                            except Exception:
-                                is_duplicate = False
+                            # Safe Industrial Check: Avoid sending SIZE command to Omron CJ2M
+                            # because querying remote size locks the CompactFlash card and starves FINS comms.
+                            # If local file already exists and is non-empty, treat as existing.
+                            if local_filepath.stat().st_size > 0:
+                                is_duplicate = True
 
                     if is_duplicate:
                         skipped_files.append((filename, pure_filename, local_filepath, csv_filepath))
@@ -515,6 +536,11 @@ class FTPDownloader:
                         current_index += 1
                         if progress_callback:
                             progress_callback(current_index, total_files)
+
+                        # Industrial Safe Pacing Delay (150ms):
+                        # Yields CPU and network time slice back to Omron CJ2M so Ladder logic and
+                        # HMI Heartbeat (FINS) run uninterrupted without triggering 'PLC NOT RESPONSE'.
+                        time.sleep(0.15)
                     except Exception as e:
                         _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ❌ Error downloading {filename}: {e}", "error")
                         error_count += 1
