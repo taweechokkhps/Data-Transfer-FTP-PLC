@@ -42,10 +42,12 @@ class AppLogger:
 
         # Smart fallback if level is generic 'info' or None
         if not raw_level or raw_level == "info":
-            if "error" in lower_msg or "failed" in lower_msg:
+            if "❌" in message or "error" in lower_msg or "failed" in lower_msg:
                 raw_level = "error"
             elif "502" in lower_msg or "switching to active" in lower_msg:
                 raw_level = "switch_mode"
+            elif "download process completed" in lower_msg and "✅" in message:
+                raw_level = "completed"
             elif "downloaded" in lower_msg or "converted to csv" in lower_msg or "download process completed" in lower_msg:
                 raw_level = "success"
             elif "warning" in lower_msg or "skipped" in lower_msg:
@@ -57,6 +59,9 @@ class AppLogger:
         if raw_level in ["switch_mode", "switch mode", "switch"]:
             canonical_tag = "SWITCH MODE"
             norm_level = "switch_mode"
+        elif raw_level in ["completed"]:
+            canonical_tag = "SUCCESS"
+            norm_level = "completed"
         elif raw_level in ["success", "ok"]:
             canonical_tag = "SUCCESS"
             norm_level = "success"
@@ -96,6 +101,7 @@ class AppLogger:
 
     def info(self, message: str): self.log(message, "info")
     def success(self, message: str): self.log(message, "success")
+    def completed(self, message: str): self.log(message, "completed")
     def warning(self, message: str): self.log(message, "warning")
     def error(self, message: str): self.log(message, "error")
     def switch_mode(self, message: str): self.log(message, "switch_mode")

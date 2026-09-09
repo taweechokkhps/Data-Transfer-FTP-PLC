@@ -18,6 +18,7 @@ class LogConsole(ctk.CTkFrame):
         
         self.textbox.tag_config("info", foreground="#64B5F6")
         self.textbox.tag_config("success", foreground="#00E676")
+        self.textbox.tag_config("completed", foreground="#00E5FF")
         self.textbox.tag_config("error", foreground="#FF5252")
         self.textbox.tag_config("warning", foreground="#FFB74D")
         self.textbox.tag_config("switch_mode", foreground="#E040FB")
@@ -30,8 +31,10 @@ class LogConsole(ctk.CTkFrame):
             lower = message.lower()
             if "[switch mode]" in lower or "502" in lower or "switching to active" in lower:
                 tag = "switch_mode"
-            elif "[error]" in lower or "error" in lower or "fail" in lower:
+            elif "[error]" in lower or "❌" in message or "error" in lower or "fail" in lower:
                 tag = "error"
+            elif "download process completed" in lower and "✅" in message:
+                tag = "completed"
             elif "[warning]" in lower or "warning" in lower:
                 tag = "warning"
             elif "[success]" in lower or "success" in lower or "downloaded" in lower or "completed" in lower:
@@ -39,7 +42,7 @@ class LogConsole(ctk.CTkFrame):
             elif "[info]" in lower:
                 tag = "info"
 
-        if tag in ["info", "success", "error", "warning", "switch_mode"]:
+        if tag in ["info", "success", "completed", "error", "warning", "switch_mode"]:
             self.textbox.insert("end", message + "\n", tag)
         else:
             self.textbox.insert("end", message + "\n")

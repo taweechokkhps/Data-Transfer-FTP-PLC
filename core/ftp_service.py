@@ -374,6 +374,7 @@ class FTPDownloader:
                 except Exception as e:
                     _emit_log(log_callback, f"[{self.plc_name}] Invalid date format ({start_str} - {end_str}): {e}", "warning")
 
+            error_count = 0
             files_by_machine = {}
             total_target_files = []
             for m in self.machines:
@@ -382,7 +383,8 @@ class FTPDownloader:
                 r_dir = m["remote_dir"]
                 ok, actual_dir = self._try_cwd(self.ftp, r_dir)
                 if not ok:
-                    _emit_log(log_callback, f"[{self.plc_name}] Error accessing {m['name']} ({r_dir}): {actual_dir}", "error")
+                    _emit_log(log_callback, f"[{self.plc_name}] ❌ Error accessing {m['name']} ({r_dir}): {actual_dir}", "error")
+                    error_count += 1
                     continue
                 try:
                     files = self._safe_nlst(log_callback=log_callback)
@@ -413,7 +415,8 @@ class FTPDownloader:
                     files_by_machine[m["name"]] = (actual_dir, t_files, batch_folder_name)
                     total_target_files.extend(t_files)
                 except Exception as e:
-                    _emit_log(log_callback, f"[{self.plc_name}] Error listing {m['name']} ({actual_dir}): {e}", "error")
+                    _emit_log(log_callback, f"[{self.plc_name}] ❌ Error listing {m['name']} ({actual_dir}): {e}", "error")
+                    error_count += 1
 
             if not total_target_files:
                 if mode == "range" and start_date and end_date:
@@ -513,7 +516,8 @@ class FTPDownloader:
                         if progress_callback:
                             progress_callback(current_index, total_files)
                     except Exception as e:
-                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Error downloading {filename}: {e}", "error")
+                        _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ❌ Error downloading {filename}: {e}", "error")
+                        error_count += 1
 
             elapsed = time.time() - start_time
             total_ms = elapsed * 1000
@@ -522,9 +526,21 @@ class FTPDownloader:
                 dur_str = f"{mins:02d}:{secs:02d} ({total_ms:,.0f} ms)"
             else:
                 dur_str = f"{elapsed:.3f}s ({total_ms:,.0f} ms)"
-            _emit_log(log_callback, f"[{self.plc_name}] Download process completed in {dur_str} ({current_index}/{total_files} files).", "success")
+
+            if error_count > 0:
+                _emit_log(
+                    log_callback,
+                    f"[{self.plc_name}] ❌ Download process completed with {error_count} error(s) in {dur_str} ({current_index}/{total_files} files).",
+                    "error"
+                )
+            else:
+                _emit_log(
+                    log_callback,
+                    f"[{self.plc_name}] ✅ Download process completed in {dur_str} ({current_index}/{total_files} files).",
+                    "completed"
+                )
         except Exception as e:
-            _emit_log(log_callback, f"[{self.plc_name}] FTP Error: {e}", "error")
+            _emit_log(log_callback, f"[{self.plc_name}] ❌ FTP Error: {e}", "error")
         finally:
             self.disconnect()
             self.is_running = False

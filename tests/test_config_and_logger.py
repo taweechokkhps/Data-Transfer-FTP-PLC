@@ -48,17 +48,23 @@ def test_logger_tags_and_switch_mode():
     logger.error("Operation failed")
     logger.warning("Caution advised")
     logger.switch_mode("Switched from PASV to PORT")
+    logger.completed("✅ Download process completed in 1.2s")
     # Smart detection check
     logger.log("Notice: 502 PASV not implemented. Switching to Active mode.")
+    logger.log("✅ Download process completed in 0.5s")
+    logger.log("❌ Download process completed with 1 error(s)")
     logger.unregister_callback(cb)
 
-    assert len(logs) == 6
+    assert len(logs) == 9
     assert "[INFO]" in logs[0][0] and logs[0][1] == "info"
     assert "[SUCCESS]" in logs[1][0] and logs[1][1] == "success"
     assert "[ERROR]" in logs[2][0] and logs[2][1] == "error"
     assert "[WARNING]" in logs[3][0] and logs[3][1] == "warning"
     assert "[SWITCH MODE]" in logs[4][0] and logs[4][1] == "switch_mode"
-    assert "[SWITCH MODE]" in logs[5][0] and logs[5][1] == "switch_mode"
+    assert "[SUCCESS]" in logs[5][0] and logs[5][1] == "completed"
+    assert "[SWITCH MODE]" in logs[6][0] and logs[6][1] == "switch_mode"
+    assert "[SUCCESS]" in logs[7][0] and logs[7][1] == "completed"
+    assert "[ERROR]" in logs[8][0] and logs[8][1] == "error"
 
 if __name__ == "__main__":
     test_config_crud()
