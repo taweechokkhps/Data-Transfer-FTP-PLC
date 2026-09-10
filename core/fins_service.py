@@ -1,7 +1,31 @@
 import socket
 import struct
 
-def build_fins_read_bit_frame(node_id: int = 0, area_code: int = 0x31, word: int = 50, bit: int = 2) -> bytes:
+def get_local_node_id(dest_ip: str) -> int:
+    """
+    Determines the local node ID (last octet of the local IP routed to dest_ip).
+    Omron FINS requires SA1 (Source Node Address) to match the client's node ID,
+    otherwise the PLC rejects the frame with FINS error 2108.
+    """
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect((dest_ip, 9600))
+        local_ip = s.getsockname()[0]
+        s.close()
+        parts = local_ip.split(".")
+        if len(parts) == 4:
+            return int(parts[3]) & 0xFF
+    except Exception:
+        pass
+    return 0
+
+def build_fins_read_bit_frame(
+    node_id: int = 0,
+    src_node_id: int = 0,
+    area_code: int = 0x31,
+    word: int = 50,
+    bit: int = 2
+) -> bytes:
     """
     Constructs an 18-byte Omron FINS/UDP frame to read a single bit from memory area.
     Default area_code 0x31 = Work Area Bit (WR).
@@ -16,7 +40,7 @@ def build_fins_read_bit_frame(node_id: int = 0, area_code: int = 0x31, word: int
         node_id & 0xFF,     # DA1: Destination node (last octet of PLC IP or 0)
         0x00,               # DA2: Destination unit (0 = CPU)
         0x00,               # SNA: Source network
-        0x00,               # SA1: Source node
+        src_node_id & 0xFF, # SA1: Source node (last octet of PC IP)
         0x00,               # SA2: Source unit
         0x01                # SID: Service ID
     ])
@@ -77,8 +101,16 @@ def check_omron_machine_bit(
         except Exception:
             node_id = 0
 
+        src_node_id = get_local_node_id(host)
+
         # Build 18-byte FINS request (default Area 0x31, Word 50, Bit 2 = W50.02)
-        request = build_fins_read_bit_frame(node_id=node_id, area_code=area_code, word=word, bit=bit)
+        request = build_fins_read_bit_frame(
+            node_id=node_id,
+            src_node_id=src_node_id,
+            area_code=area_code,
+            word=word,
+            bit=bit
+        )
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(timeout)

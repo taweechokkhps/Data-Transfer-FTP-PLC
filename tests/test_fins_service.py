@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.fins_service import (
+    get_local_node_id,
     build_fins_read_bit_frame,
     parse_fins_read_bit_response,
     check_omron_machine_bit,
@@ -14,7 +15,7 @@ from core.fins_service import (
 
 class TestFinsService(unittest.TestCase):
     def test_build_fins_read_bit_frame_default_w50_02(self):
-        frame = build_fins_read_bit_frame(node_id=11)
+        frame = build_fins_read_bit_frame(node_id=11, src_node_id=12)
         self.assertEqual(len(frame), 18)
 
         # Header (10 bytes)
@@ -25,7 +26,7 @@ class TestFinsService(unittest.TestCase):
         self.assertEqual(frame[4], 11)    # DA1 (node 11)
         self.assertEqual(frame[5], 0x00)  # DA2 (CPU)
         self.assertEqual(frame[6], 0x00)  # SNA
-        self.assertEqual(frame[7], 0x00)  # SA1
+        self.assertEqual(frame[7], 12)    # SA1 (src node 12)
         self.assertEqual(frame[8], 0x00)  # SA2
         self.assertEqual(frame[9], 0x01)  # SID
 
