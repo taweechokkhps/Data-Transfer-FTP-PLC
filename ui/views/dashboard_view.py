@@ -476,7 +476,7 @@ class DashboardView(ctk.CTkFrame):
                         progress_bar.set(prog)
                     if counter_label and counter_label.winfo_exists():
                         if remaining > 0 and eta_str:
-                            counter_label.configure(text=f"{current}/{total} ({pct}%) • เหลือ {remaining} ({eta_str})")
+                            counter_label.configure(text=f"{current}/{total} ({pct}%) • ({eta_str})")
                         else:
                             counter_label.configure(text=f"{current} / {total} files ({pct}%)")
                 except Exception:

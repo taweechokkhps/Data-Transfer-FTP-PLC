@@ -238,7 +238,7 @@ def _emit_log(callback, message: str, level: str = "info"):
         callback(message)
 
 def calculate_download_eta(remaining: int, actual_durations: list[float]) -> str:
-    """Calculates compact ETA string (Format B-2) using sliding average of recent actual download times."""
+    """Calculates compact ETA string with Hour, Min, Sec using sliding average of recent download times."""
     if remaining <= 0:
         return ""
     if len(actual_durations) < 2:
@@ -247,11 +247,14 @@ def calculate_download_eta(remaining: int, actual_durations: list[float]) -> str
     recent = actual_durations[-10:]
     avg_sec = sum(recent) / len(recent)
     eta_sec = remaining * avg_sec
+    if eta_sec >= 3600:
+        hours = eta_sec / 3600.0
+        return f"~{hours:.2f} Hour" if hours < 10 else f"~{hours:.1f} Hour"
     if eta_sec >= 60:
         mins = max(1, round(eta_sec / 60))
-        return f"~{mins}m"
+        return f"~{mins} Min"
     secs = max(1, int(eta_sec))
-    return f"~{secs}s"
+    return f"~{secs} Sec"
 
 def _emit_progress(cb, current: int, total: int, remaining: int = 0, eta_str: str = ""):
     if not cb:

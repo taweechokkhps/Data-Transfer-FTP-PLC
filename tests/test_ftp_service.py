@@ -97,12 +97,14 @@ class TestFTPService(unittest.TestCase):
         self.assertEqual(calculate_download_eta(remaining=10, actual_durations=[]), "คำนวณ...")
         self.assertEqual(calculate_download_eta(remaining=10, actual_durations=[1.0]), "คำนวณ...")
 
-    def test_calculate_download_eta_minutes_and_seconds(self):
+    def test_calculate_download_eta_hours_minutes_seconds(self):
         from core.ftp_service import calculate_download_eta
-        # 20 files remaining, average 10s per file -> 200s -> ~3m
-        self.assertEqual(calculate_download_eta(remaining=20, actual_durations=[10.0, 10.0]), "~3m")
-        # 2 files remaining, average 15s per file -> 30s -> ~30s
-        self.assertEqual(calculate_download_eta(remaining=2, actual_durations=[15.0, 15.0]), "~30s")
+        # 400 files remaining, average 11.16s per file -> 4464s -> ~1.24 Hour
+        self.assertEqual(calculate_download_eta(remaining=400, actual_durations=[11.16, 11.16]), "~1.24 Hour")
+        # 20 files remaining, average 9s per file -> 180s -> ~3 Min
+        self.assertEqual(calculate_download_eta(remaining=20, actual_durations=[9.0, 9.0]), "~3 Min")
+        # 2 files remaining, average 15s per file -> 30s -> ~30 Sec
+        self.assertEqual(calculate_download_eta(remaining=2, actual_durations=[15.0, 15.0]), "~30 Sec")
         # 0 files remaining -> empty
         self.assertEqual(calculate_download_eta(remaining=0, actual_durations=[1.0, 1.0]), "")
 
