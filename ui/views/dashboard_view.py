@@ -440,7 +440,8 @@ class DashboardView(ctk.CTkFrame):
                     action_button.configure(text="Stopping...", state="disabled")
             except Exception:
                 pass
-            downloader.cancel()
+            downloader.is_running = False
+            threading.Thread(target=downloader.cancel, daemon=True).start()
 
         if action_button and action_button.winfo_exists():
             action_button.configure(
@@ -537,7 +538,9 @@ class DashboardView(ctk.CTkFrame):
     def download_all(self, on_complete=None):
         if self.has_active_downloads():
             logger.warning("[Download All] Stopping all ongoing downloads...")
-            self.stop_all_downloads()
+            for dl in list(self.active_downloaders.values()):
+                dl.is_running = False
+            threading.Thread(target=self.stop_all_downloads, daemon=True).start()
             if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
                 self.btn_download_all.configure(
                     text="📥 Download All",

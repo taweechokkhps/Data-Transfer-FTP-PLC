@@ -329,9 +329,9 @@ class FTPDownloader:
         _emit_log(log_callback, f"[{self.plc_name}] 🛑 กำลังยกเลิกการดาวน์โหลด และปิดการเชื่อมต่อกับ PLC อย่างปลอดภัย...", "warning")
         if self.ftp:
             try:
-                # Attempt to send FTP ABOR command so Omron PLC halts data transfer immediately
+                # Fast timeout (300ms) for sending ABOR so we don't hang if PLC is busy
                 if hasattr(self.ftp, 'sock') and self.ftp.sock:
-                    self.ftp.sock.settimeout(1.0)
+                    self.ftp.sock.settimeout(0.3)
                 self.ftp.abort()
             except Exception:
                 pass
@@ -344,7 +344,7 @@ class FTPDownloader:
         if self.ftp:
             try:
                 if hasattr(self.ftp, 'sock') and self.ftp.sock:
-                    self.ftp.sock.settimeout(1.5)
+                    self.ftp.sock.settimeout(0.3)
                 self.ftp.quit()
             except Exception:
                 pass
@@ -565,7 +565,11 @@ class FTPDownloader:
                         try:
                             f_start = time.perf_counter()
                             with open(local_filepath, 'wb') as f:
-                                self._safe_retrbinary(f"RETR {filename}", f.write, log_callback=log_callback)
+                                def _write_chunk(chunk):
+                                    if not self.is_running:
+                                        raise InterruptedError("Transfer aborted by user")
+                                    f.write(chunk)
+                                self._safe_retrbinary(f"RETR {filename}", _write_chunk, log_callback=log_callback)
                             f_dur_ms = (time.perf_counter() - f_start) * 1000
                             f_size_kb = local_filepath.stat().st_size / 1024
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms", "success")
@@ -583,10 +587,11 @@ class FTPDownloader:
                             if progress_callback:
                                 progress_callback(current_index, total_files)
 
-                            # Industrial Safe Pacing Delay (150ms):
-                            # Yields CPU and network time slice back to Omron CJ2M so Ladder logic and
-                            # HMI Heartbeat (FINS) run uninterrupted without triggering 'PLC NOT RESPONSE'.
-                            time.sleep(0.15)
+                            # Industrial Safe Pacing Delay (150ms interruptible):
+                            for _ in range(15):
+                                if not self.is_running:
+                                    break
+                                time.sleep(0.01)
                             break
                         except Exception as e:
                             # Clean up partial incomplete file on transfer error/cancellation
@@ -601,7 +606,10 @@ class FTPDownloader:
                                 break
                             if attempt < max_retries - 1 and self.is_running:
                                 _emit_log(log_callback, f"[{self.plc_name}][{m_name}] PLC กำลังบันทึกข้อมูลอยู่ ({pure_filename}) จะลองใหม่ใน 1.5 วินาที...", "warning")
-                                time.sleep(1.5)
+                                for _ in range(150):
+                                    if not self.is_running:
+                                        break
+                                    time.sleep(0.01)
                             else:
                                 _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ❌ Error downloading {filename}: {e}", "error")
                                 error_count += 1
