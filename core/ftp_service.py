@@ -9,6 +9,7 @@ from pathlib import Path
 from contextlib import redirect_stdout
 from core.path_utils import sanitize_remote_path, format_local_save_dir, parse_date_from_filename, format_batch_save_dir, get_batch_subdirs
 from core.converter_service import convert_txt_to_csv
+from core.fins_service import check_omron_w200_bit
 from core.logger import logger
 
 def test_connection(host: str, port: int, username: str, password: str, timeout: int = 15, ftp_mode: str = "auto") -> tuple[bool, str]:
@@ -375,6 +376,19 @@ class FTPDownloader:
     def download_files(self, progress_callback=None, log_callback=None) -> bool:
         start_time = time.time()
         self.is_running = True
+
+        # Safety Interlock: Check Omron PLC bit W200.00 via FINS/UDP port 9600 before connecting to FTP
+        fins_ok, is_on, fins_msg = check_omron_w200_bit(self.host)
+        if not fins_ok:
+            _emit_log(log_callback, f"[{self.plc_name}] ⚠️ ไม่สามารถตรวจสอบสถานะเครื่องจักรได้ ({fins_msg}) ข้ามการดาวน์โหลดเพื่อความปลอดภัย", "warning")
+            self.is_running = False
+            return False
+
+        if is_on:
+            _emit_log(log_callback, f"[{self.plc_name}] ⚠️ เครื่องจักรกำลังทำงาน (W200.00 = ON) ข้ามการดาวน์โหลดเพื่อความปลอดภัย", "warning")
+            self.is_running = False
+            return False
+
         success, msg = self.connect(log_callback)
         if not success:
             _emit_log(log_callback, f"[{self.plc_name}] {msg}", "error")

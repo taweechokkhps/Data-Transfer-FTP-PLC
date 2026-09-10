@@ -3,7 +3,7 @@ import sys
 import unittest
 import tempfile
 import shutil
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -13,6 +13,9 @@ from core.path_utils import format_batch_save_dir, get_batch_subdirs
 class TestFTPDuplicateAndDownloadLogging(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
+        self.fins_patcher = patch('core.ftp_service.check_omron_w200_bit', return_value=(True, False, "OK"))
+        self.mock_check_fins = self.fins_patcher.start()
+
         self.downloader = FTPDownloader(
             host="127.0.0.1",
             port=21,
@@ -33,6 +36,7 @@ class TestFTPDuplicateAndDownloadLogging(unittest.TestCase):
         self.downloader._try_cwd = MagicMock(return_value=(True, "/MEMCARD"))
 
     def tearDown(self):
+        self.fins_patcher.stop()
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_all_files_duplicate_summary_log(self):
@@ -114,6 +118,21 @@ class TestFTPDuplicateAndDownloadLogging(unittest.TestCase):
         # Verify download progression
         self.assertTrue(any("กำลังดาวน์โหลด: 010120.txt" in msg for lvl, msg in logs))
         self.assertTrue(any("Downloaded 010120.txt" in msg for lvl, msg in logs))
+
+    def test_machine_running_w200_on_skips_download(self):
+        self.mock_check_fins.return_value = (True, True, "OK")
+        logs = []
+        res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
+        self.assertFalse(res)
+        self.assertTrue(any("W200.00 = ON" in msg for lvl, msg in logs))
+        self.assertFalse(any("Downloaded" in msg for lvl, msg in logs))
+
+    def test_fins_check_failed_skips_download(self):
+        self.mock_check_fins.return_value = (False, None, "FINS Timeout (2.0s)")
+        logs = []
+        res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
+        self.assertFalse(res)
+        self.assertTrue(any("ไม่สามารถตรวจสอบสถานะเครื่องจักรได้" in msg for lvl, msg in logs))
 
 if __name__ == "__main__":
     unittest.main()
