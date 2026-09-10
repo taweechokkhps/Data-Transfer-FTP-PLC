@@ -1,11 +1,11 @@
 import socket
 import struct
 
-def build_fins_read_bit_frame(node_id: int = 0, area_code: int = 0x31, word: int = 200, bit: int = 0) -> bytes:
+def build_fins_read_bit_frame(node_id: int = 0, area_code: int = 0x31, word: int = 50, bit: int = 2) -> bytes:
     """
     Constructs an 18-byte Omron FINS/UDP frame to read a single bit from memory area.
     Default area_code 0x31 = Work Area Bit (WR).
-    Word 200, Bit 0 = W200.00.
+    Word 50, Bit 2 = W50.02.
     """
     # 10-byte FINS Header
     header = bytes([
@@ -22,20 +22,10 @@ def build_fins_read_bit_frame(node_id: int = 0, area_code: int = 0x31, word: int
     ])
 
     # 2-byte Command (01 01 = Memory Area Read)
-    command = bytes([0x01, 0x01])
-
-    # 6-byte Parameters (Area code + 3-byte address + 2-byte count)
-    # Address: 2 bytes word (big-endian) + 1 byte bit (0-15)
-    # Count: 2 bytes count (big-endian: 1 bit = 0x0001)
-    params = struct.pack(">BHBBH", area_code, word, bit & 0x0F, 0x00, 1)
-
-    # Note: struct.pack(">BHBBH") creates:
-    # B: area_code (1 byte)
-    # H: word (2 bytes)
-    # B: bit (1 byte)
-    # H: count (2 bytes)
-    # Total params = 1 + 2 + 1 + 2 = 6 bytes
-    return header + bytes([0x01, 0x01, area_code, (word >> 8) & 0xFF, word & 0xFF, bit & 0xFF, 0x00, 0x01])
+    # 6-byte Parameters:
+    # Area code (1B) + Word (2B big-endian) + Bit (1B) + Count (2B big-endian, 1 bit = 0x0001)
+    params = struct.pack(">BBBHBH", 0x01, 0x01, area_code, word, bit & 0x0F, 1)
+    return header + params
 
 def parse_fins_read_bit_response(response: bytes) -> tuple[bool, bool | None, str]:
     """
@@ -62,13 +52,20 @@ def parse_fins_read_bit_response(response: bytes) -> tuple[bool, bool | None, st
     is_on = (bit_val == 0x01)
     return True, is_on, "OK"
 
-def check_omron_w200_bit(host: str, port: int = 9600, timeout: float = 2.0) -> tuple[bool, bool | None, str]:
+def check_omron_machine_bit(
+    host: str,
+    port: int = 9600,
+    area_code: int = 0x31,
+    word: int = 50,
+    bit: int = 2,
+    timeout: float = 2.0
+) -> tuple[bool, bool | None, str]:
     """
-    Checks the status of Omron PLC bit W200.00 via FINS/UDP.
+    Checks the status of Omron PLC bit (default W50.02) via FINS/UDP.
     Returns:
         (success, is_on, message)
-        - success=True, is_on=True: Machine is active (W200.00 is ON)
-        - success=True, is_on=False: Machine is idle (W200.00 is OFF)
+        - success=True, is_on=True: Machine is active (W50.02 is ON)
+        - success=True, is_on=False: Machine is idle (W50.02 is OFF)
         - success=False: Communication failed (Timeout, network unreachable, etc.)
     """
     try:
@@ -80,8 +77,8 @@ def check_omron_w200_bit(host: str, port: int = 9600, timeout: float = 2.0) -> t
         except Exception:
             node_id = 0
 
-        # Build 18-byte FINS request for W200.00 (Area 0x31, Word 200, Bit 0)
-        request = build_fins_read_bit_frame(node_id=node_id, area_code=0x31, word=200, bit=0)
+        # Build 18-byte FINS request (default Area 0x31, Word 50, Bit 2 = W50.02)
+        request = build_fins_read_bit_frame(node_id=node_id, area_code=area_code, word=word, bit=bit)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(timeout)
@@ -96,3 +93,6 @@ def check_omron_w200_bit(host: str, port: int = 9600, timeout: float = 2.0) -> t
         return False, None, f"FINS Timeout ({timeout}s) on {host}:{port}"
     except Exception as e:
         return False, None, f"FINS Error: {e}"
+
+# Backward-compatibility alias
+check_omron_w200_bit = check_omron_machine_bit

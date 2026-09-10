@@ -13,7 +13,7 @@ from core.path_utils import format_batch_save_dir, get_batch_subdirs
 class TestFTPDuplicateAndDownloadLogging(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
-        self.fins_patcher = patch('core.ftp_service.check_omron_w200_bit', return_value=(True, False, "OK"))
+        self.fins_patcher = patch('core.ftp_service.check_omron_machine_bit', return_value=(True, False, "OK"))
         self.mock_check_fins = self.fins_patcher.start()
 
         self.downloader = FTPDownloader(
@@ -119,12 +119,12 @@ class TestFTPDuplicateAndDownloadLogging(unittest.TestCase):
         self.assertTrue(any("กำลังดาวน์โหลด: 010120.txt" in msg for lvl, msg in logs))
         self.assertTrue(any("Downloaded 010120.txt" in msg for lvl, msg in logs))
 
-    def test_machine_running_w200_on_skips_download(self):
+    def test_machine_running_w50_02_on_skips_download(self):
         self.mock_check_fins.return_value = (True, True, "OK")
         logs = []
         res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
         self.assertFalse(res)
-        self.assertTrue(any("W200.00 = ON" in msg for lvl, msg in logs))
+        self.assertTrue(any("W50.02 = ON" in msg for lvl, msg in logs))
         self.assertFalse(any("Downloaded" in msg for lvl, msg in logs))
 
     def test_fins_check_failed_skips_download(self):
