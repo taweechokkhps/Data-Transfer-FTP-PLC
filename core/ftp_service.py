@@ -644,19 +644,19 @@ class FTPDownloader:
             if not self.is_running:
                 _emit_log(
                     log_callback,
-                    f"[{self.plc_name}] 🛑 Download process stopped by user ({current_index}/{total_files} files).",
+                    f"[{self.plc_name}] 🛑 Download process stopped by user ({current_index}/{total_files} files) in {dur_str}.",
                     "warning"
                 )
             elif error_count > 0:
                 _emit_log(
                     log_callback,
-                    f"[{self.plc_name}] ❌ Download process completed with {error_count} error(s) in {dur_str} ({current_index}/{total_files} files).",
+                    f"[{self.plc_name}] ❌ Download process completed with {error_count} error(s) ({current_index}/{total_files} files) in {dur_str}.",
                     "error"
                 )
             else:
                 _emit_log(
                     log_callback,
-                    f"[{self.plc_name}] ✅ Download process completed in {dur_str} ({current_index}/{total_files} files).",
+                    f"[{self.plc_name}] ✅ Download process completed ({current_index}/{total_files} files) in {dur_str}.",
                     "completed"
                 )
         except Exception as e:
