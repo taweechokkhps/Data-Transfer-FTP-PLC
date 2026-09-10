@@ -85,11 +85,11 @@ def check_omron_machine_bit(
     timeout: float = 2.0
 ) -> tuple[bool, bool | None, str]:
     """
-    Checks the status of Omron PLC bit (default W50.02) via FINS/UDP.
+    Checks the status of Omron PLC bit (default W50.02: Auto/Manual mode) via FINS/UDP.
     Returns:
-        (success, is_on, message)
-        - success=True, is_on=True: Machine is active (W50.02 is ON)
-        - success=True, is_on=False: Machine is idle (W50.02 is OFF)
+        (success, is_auto, message)
+        - success=True, is_auto=True: Machine is in AUTO mode (bit is ON)
+        - success=True, is_auto=False: Machine is in MANUAL mode (bit is OFF)
         - success=False: Communication failed (Timeout, network unreachable, etc.)
     """
     try:

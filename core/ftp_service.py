@@ -376,18 +376,7 @@ class FTPDownloader:
     def download_files(self, progress_callback=None, log_callback=None) -> bool:
         start_time = time.time()
         self.is_running = True
-
-        # Safety Interlock: Check Omron PLC bit W50.02 via FINS/UDP port 9600 before connecting to FTP
-        fins_ok, is_on, fins_msg = check_omron_machine_bit(self.host)
-        if not fins_ok:
-            _emit_log(log_callback, f"[{self.plc_name}] ⚠️ ไม่สามารถตรวจสอบสถานะเครื่องจักรได้ ({fins_msg}) ข้ามการดาวน์โหลดเพื่อความปลอดภัย", "warning")
-            self.is_running = False
-            return False
-
-        if is_on:
-            _emit_log(log_callback, f"[{self.plc_name}] ⚠️ เครื่องจักรกำลังทำงาน (W50.02 = ON) ข้ามการดาวน์โหลดเพื่อความปลอดภัย", "warning")
-            self.is_running = False
-            return False
+        machine_mode_cache = None
 
         success, msg = self.connect(log_callback)
         if not success:
@@ -526,6 +515,27 @@ class FTPDownloader:
                     if not self.is_running:
                         _emit_log(log_callback, f"[{self.plc_name}] Download stopped by user.", "warning")
                         break
+
+                    f_date = parse_date_from_filename(pure_filename)
+                    if f_date == today:
+                        # Safety Interlock: Check machine mode (Auto vs Manual) via FINS/UDP port 9600 for today's active file
+                        if machine_mode_cache is None:
+                            machine_mode_cache = check_omron_machine_bit(self.host)
+
+                        fins_ok, is_auto, fins_msg = machine_mode_cache
+                        if not fins_ok:
+                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ⚠️ ไม่สามารถตรวจสอบโหมดเครื่องจักรได้ ({fins_msg}) ข้ามการดาวน์โหลดไฟล์วันปัจจุบัน ({pure_filename}) เพื่อความปลอดภัย", "warning")
+                            current_index += 1
+                            if progress_callback:
+                                progress_callback(current_index, total_files)
+                            continue
+
+                        if is_auto:
+                            _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ⚠️ เครื่องจักรกำลังทำงานในโหมด AUTO แนะนำให้เปลี่ยนเป็นโหมด MANUAL ก่อนดาวน์โหลดไฟล์วันปัจจุบัน (ข้าม {pure_filename})", "warning")
+                            current_index += 1
+                            if progress_callback:
+                                progress_callback(current_index, total_files)
+                            continue
 
                     _emit_log(log_callback, f"[{self.plc_name}][{m_name}] กำลังดาวน์โหลด: {pure_filename}", "info")
 

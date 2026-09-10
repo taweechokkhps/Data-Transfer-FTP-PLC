@@ -119,20 +119,59 @@ class TestFTPDuplicateAndDownloadLogging(unittest.TestCase):
         self.assertTrue(any("กำลังดาวน์โหลด: 010120.txt" in msg for lvl, msg in logs))
         self.assertTrue(any("Downloaded 010120.txt" in msg for lvl, msg in logs))
 
-    def test_machine_running_w50_02_on_skips_download(self):
-        self.mock_check_fins.return_value = (True, True, "OK")
+    def test_machine_auto_mode_skips_today_file_and_recommends_manual(self):
+        import datetime
+        today_filename = datetime.date.today().strftime("%d%m%y") + ".txt"
+        self.downloader._safe_nlst = MagicMock(return_value=[today_filename])
+        self.mock_check_fins.return_value = (True, True, "OK")  # Machine in AUTO mode
+        
         logs = []
         res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
-        self.assertFalse(res)
-        self.assertTrue(any("W50.02 = ON" in msg for lvl, msg in logs))
-        self.assertFalse(any("Downloaded" in msg for lvl, msg in logs))
+        
+        self.assertTrue(res)
+        # Verify log explains AUTO mode and recommends MANUAL without mentioning bit W50.02
+        self.assertTrue(any("โหมด AUTO แนะนำให้เปลี่ยนเป็นโหมด MANUAL ก่อนดาวน์โหลดไฟล์วันปัจจุบัน" in msg for lvl, msg in logs))
+        self.assertFalse(any("W50.02" in msg for lvl, msg in logs))
+        self.assertFalse(any(f"Downloaded {today_filename}" in msg for lvl, msg in logs))
 
-    def test_fins_check_failed_skips_download(self):
-        self.mock_check_fins.return_value = (False, None, "FINS Timeout (2.0s)")
+    def test_machine_auto_mode_does_not_block_past_files(self):
+        # 010120.txt is Jan 1, 2020 (past file)
+        self.downloader._safe_nlst = MagicMock(return_value=["010120.txt"])
+        self.mock_check_fins.return_value = (True, True, "OK")  # Machine in AUTO mode
+        
         logs = []
         res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
-        self.assertFalse(res)
-        self.assertTrue(any("ไม่สามารถตรวจสอบสถานะเครื่องจักรได้" in msg for lvl, msg in logs))
+        
+        self.assertTrue(res)
+        self.assertTrue(any("Downloaded 010120.txt" in msg for lvl, msg in logs))
+        # FINS was not even queried for past files
+        self.mock_check_fins.assert_not_called()
+
+    def test_machine_manual_mode_downloads_today_file(self):
+        import datetime
+        today_filename = datetime.date.today().strftime("%d%m%y") + ".txt"
+        self.downloader._safe_nlst = MagicMock(return_value=[today_filename])
+        self.mock_check_fins.return_value = (True, False, "OK")  # Machine in MANUAL mode
+        
+        logs = []
+        res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
+        
+        self.assertTrue(res)
+        self.assertTrue(any(f"Downloaded {today_filename}" in msg for lvl, msg in logs))
+
+    def test_fins_check_failed_skips_today_file(self):
+        import datetime
+        today_filename = datetime.date.today().strftime("%d%m%y") + ".txt"
+        self.downloader._safe_nlst = MagicMock(return_value=[today_filename])
+        self.mock_check_fins.return_value = (False, None, "FINS Timeout (2.0s)")
+        
+        logs = []
+        res = self.downloader.download_files(log_callback=lambda msg, lvl="info": logs.append((lvl, msg)))
+        
+        self.assertTrue(res)
+        self.assertTrue(any("ไม่สามารถตรวจสอบโหมดเครื่องจักรได้" in msg for lvl, msg in logs))
+        self.assertFalse(any("W50.02" in msg for lvl, msg in logs))
+        self.assertFalse(any(f"Downloaded {today_filename}" in msg for lvl, msg in logs))
 
 if __name__ == "__main__":
     unittest.main()
