@@ -108,6 +108,18 @@ class TestFTPService(unittest.TestCase):
         # 0 files remaining -> empty
         self.assertEqual(calculate_download_eta(remaining=0, actual_durations=[1.0, 1.0]), "")
 
+    def test_calculate_download_speed(self):
+        from core.ftp_service import calculate_download_speed
+        # warm-up (< 2 files)
+        self.assertEqual(calculate_download_speed([]), "")
+        self.assertEqual(calculate_download_speed([(10240, 1.0)]), "")
+        # KB/s format: 2 files of 320 KB each in 1.0s -> 320 KB/s
+        self.assertEqual(calculate_download_speed([(320 * 1024, 1.0), (320 * 1024, 1.0)]), "320 KB/s")
+        # MB/s format: 2 files of 1.5 MB each in 1.0s -> 1.5 MB/s
+        self.assertEqual(calculate_download_speed([(1536 * 1024, 1.0), (1536 * 1024, 1.0)]), "1.5 MB/s")
+        # Low speed format: 5.5 KB/s
+        self.assertEqual(calculate_download_speed([(5632, 1.0), (5632, 1.0)]), "5.5 KB/s")
+
     def test_emit_progress_backwards_compatible(self):
         from core.ftp_service import _emit_progress
         # 2-arg callback
@@ -121,6 +133,13 @@ class TestFTPService(unittest.TestCase):
             called_4.append((c, t, remaining, eta_str))
         _emit_progress(rich_cb, 10, 20, 10, "~1m")
         self.assertEqual(called_4, [(10, 20, 10, "~1m")])
+
+        # 5-arg keyword callback with speed_str
+        called_5 = []
+        def speed_cb(c, t, remaining=0, eta_str="", speed_str=""):
+            called_5.append((c, t, remaining, eta_str, speed_str))
+        _emit_progress(speed_cb, 10, 20, 10, "~3 Min", "320 KB/s")
+        self.assertEqual(called_5, [(10, 20, 10, "~3 Min", "320 KB/s")])
 
     def test_live_connection_if_available(self):
         try:

@@ -256,19 +256,43 @@ def calculate_download_eta(remaining: int, actual_durations: list[float]) -> str
     secs = max(1, int(eta_sec))
     return f"~{secs} Sec"
 
-def _emit_progress(cb, current: int, total: int, remaining: int = 0, eta_str: str = ""):
+def calculate_download_speed(actual_transfers: list[tuple[float, float]]) -> str:
+    """Calculates compact download speed string (e.g. '320 KB/s' or '1.2 MB/s') using sliding average of recent transfers."""
+    if len(actual_transfers) < 2:
+        return ""
+    # Sliding average of up to 10 most recent downloaded files
+    recent = actual_transfers[-10:]
+    total_bytes = sum(b for b, _ in recent)
+    total_sec = sum(s for _, s in recent)
+    if total_sec <= 0:
+        return ""
+    speed_bytes_sec = total_bytes / total_sec
+    speed_kb_s = speed_bytes_sec / 1024.0
+    if speed_kb_s >= 1024.0:
+        return f"{speed_kb_s / 1024.0:.1f} MB/s"
+    if speed_kb_s < 10.0:
+        return f"{speed_kb_s:.1f} KB/s"
+    return f"{speed_kb_s:.0f} KB/s"
+
+def _emit_progress(cb, current: int, total: int, remaining: int = 0, eta_str: str = "", speed_str: str = ""):
     if not cb:
         return
     try:
-        cb(current, total, remaining=remaining, eta_str=eta_str)
+        cb(current, total, remaining=remaining, eta_str=eta_str, speed_str=speed_str)
     except TypeError:
         try:
-            cb(current, total, remaining, eta_str)
+            cb(current, total, remaining, eta_str, speed_str)
         except TypeError:
             try:
-                cb(current, total)
-            except Exception:
-                pass
+                cb(current, total, remaining=remaining, eta_str=eta_str)
+            except TypeError:
+                try:
+                    cb(current, total, remaining, eta_str)
+                except TypeError:
+                    try:
+                        cb(current, total)
+                    except Exception:
+                        pass
 
 import atexit
 
@@ -527,6 +551,7 @@ class FTPDownloader:
             total_files = len(total_target_files)
             current_index = 0
             actual_durations = []
+            actual_transfers = []
 
             for m_name, (r_dir, t_files, batch_folder_name) in files_by_machine.items():
                 if not self.is_running:
@@ -580,7 +605,14 @@ class FTPDownloader:
                         _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ตรวจพบไฟล์ซ้ำ {len(skipped_files)} ไฟล์ (ข้ามการดาวน์โหลด)", "info")
                     current_index += len(skipped_files)
                     remaining_files = max(0, total_files - current_index)
-                    _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
+                    _emit_progress(
+                        progress_callback,
+                        current_index,
+                        total_files,
+                        remaining_files,
+                        calculate_download_eta(remaining_files, actual_durations),
+                        calculate_download_speed(actual_transfers),
+                    )
 
                 # Process downloads for new/updated files
                 for filename, pure_filename, local_filepath, csv_filepath in to_download:
@@ -599,14 +631,28 @@ class FTPDownloader:
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ⚠️ ไม่สามารถตรวจสอบโหมดเครื่องจักรได้ ({fins_msg}) ข้ามการดาวน์โหลดไฟล์วันปัจจุบัน ({pure_filename}) เพื่อความปลอดภัย", "warning")
                             current_index += 1
                             remaining_files = max(0, total_files - current_index)
-                            _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
+                            _emit_progress(
+                                progress_callback,
+                                current_index,
+                                total_files,
+                                remaining_files,
+                                calculate_download_eta(remaining_files, actual_durations),
+                                calculate_download_speed(actual_transfers),
+                            )
                             continue
 
                         if is_auto:
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ⚠️ เครื่องจักรกำลังทำงานในโหมด AUTO แนะนำให้เปลี่ยนเป็นโหมด MANUAL ก่อนดาวน์โหลดไฟล์วันปัจจุบัน (ข้าม {pure_filename})", "warning")
                             current_index += 1
                             remaining_files = max(0, total_files - current_index)
-                            _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
+                            _emit_progress(
+                                progress_callback,
+                                current_index,
+                                total_files,
+                                remaining_files,
+                                calculate_download_eta(remaining_files, actual_durations),
+                                calculate_download_speed(actual_transfers),
+                            )
                             continue
 
                     _emit_log(log_callback, f"[{self.plc_name}][{m_name}] กำลังดาวน์โหลด: {pure_filename}", "info")
@@ -623,8 +669,10 @@ class FTPDownloader:
                                         raise InterruptedError("Transfer aborted by user")
                                     f.write(chunk)
                                 self._safe_retrbinary(f"RETR {filename}", _write_chunk, log_callback=log_callback)
-                            f_dur_ms = (time.perf_counter() - f_start) * 1000
-                            f_size_kb = local_filepath.stat().st_size / 1024
+                            f_dur_sec = time.perf_counter() - f_start
+                            f_dur_ms = f_dur_sec * 1000
+                            f_size_bytes = local_filepath.stat().st_size
+                            f_size_kb = f_size_bytes / 1024
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Downloaded {pure_filename} ({f_size_kb:.1f} KB) in {f_dur_ms:.1f} ms", "success")
 
                             # Auto convert to CSV
@@ -637,9 +685,17 @@ class FTPDownloader:
                                 _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}", "warning")
 
                             current_index += 1
-                            actual_durations.append(f_dur_ms / 1000.0)
+                            actual_durations.append(f_dur_sec)
+                            actual_transfers.append((f_size_bytes, f_dur_sec))
                             remaining_files = max(0, total_files - current_index)
-                            _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
+                            _emit_progress(
+                                progress_callback,
+                                current_index,
+                                total_files,
+                                remaining_files,
+                                calculate_download_eta(remaining_files, actual_durations),
+                                calculate_download_speed(actual_transfers),
+                            )
 
                             # Industrial Safe Pacing Delay (150ms interruptible):
                             for _ in range(15):
