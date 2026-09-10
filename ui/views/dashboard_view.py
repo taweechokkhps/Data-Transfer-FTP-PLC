@@ -153,6 +153,14 @@ class DashboardView(ctk.CTkFrame):
             self.config_manager.update_global_settings({"target_directory": folder})
             logger.info(f"Target save directory updated to: {folder}")
 
+    def safe_after(self, delay, cb):
+        try:
+            if self.winfo_exists():
+                return self.after(delay, cb)
+        except Exception:
+            pass
+        return None
+
     def has_active_downloads(self) -> bool:
         return len(self.active_downloaders) > 0
 
@@ -450,13 +458,13 @@ class DashboardView(ctk.CTkFrame):
                         elapsed = int(time.time() - start_time)
                         mins, secs = divmod(elapsed, 60)
                         timer_label.configure(text=f"⏱ {mins:02d}:{secs:02d}", text_color="#3B8ED0")
-                        self.after(500, update_timer_ui)
+                        self.safe_after(500, update_timer_ui)
                 except Exception:
                     pass
 
         if timer_label and timer_label.winfo_exists():
             timer_label.configure(text="⏱ 00:00", text_color="#3B8ED0")
-            self.after(500, update_timer_ui)
+            self.safe_after(500, update_timer_ui)
 
         def update_progress(current, total):
             prog = current / total if total > 0 else 0
@@ -469,10 +477,10 @@ class DashboardView(ctk.CTkFrame):
                         counter_label.configure(text=f"{current} / {total} files ({pct}%)")
                 except Exception:
                     pass
-            self.after(0, _up)
+            self.safe_after(0, _up)
 
         def log_cb(msg, level=None):
-            self.after(0, lambda: logger.log(msg, level=level))
+            self.safe_after(0, lambda: logger.log(msg, level=level))
 
         def run():
             def _init_ui():
@@ -485,7 +493,7 @@ class DashboardView(ctk.CTkFrame):
                         progress_bar.set(0)
                 except Exception:
                     pass
-            self.after(0, _init_ui)
+            self.safe_after(0, _init_ui)
             logger.info(f"Starting download for {plc_data['name']}...")
             try:
                 downloader.download_files(progress_callback=update_progress, log_callback=log_cb)
@@ -522,7 +530,7 @@ class DashboardView(ctk.CTkFrame):
                     if on_finish_callback:
                         on_finish_callback()
 
-                self.after(0, _restore_ui)
+                self.safe_after(0, _restore_ui)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -556,9 +564,9 @@ class DashboardView(ctk.CTkFrame):
                         )
                 except Exception:
                     pass
-            self.after(0, _reset_btn)
+            self.safe_after(0, _reset_btn)
             if on_complete:
-                self.after(0, on_complete)
+                self.safe_after(0, on_complete)
 
         self.download_selected_lines(None, on_complete=_on_all_done)
 
@@ -570,7 +578,7 @@ class DashboardView(ctk.CTkFrame):
 
         if not triggers:
             if on_complete:
-                self.after(0, on_complete)
+                self.safe_after(0, on_complete)
             return
 
         remaining = [len(triggers)]
@@ -581,7 +589,7 @@ class DashboardView(ctk.CTkFrame):
                 remaining[0] -= 1
                 if remaining[0] <= 0:
                     if on_complete:
-                        self.after(0, on_complete)
+                        self.safe_after(0, on_complete)
 
         for trigger in triggers:
             trigger(on_finish=on_line_finished)

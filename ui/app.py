@@ -185,32 +185,55 @@ class App(ctk.CTk):
             if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
                 self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled (ปิด)")
 
-    def update_cooldown_ui(self):
-        g_settings = self.config_manager.get().get("global_settings", {})
-        is_enabled = g_settings.get("auto_pull_enabled", True)
-        interval_mins = g_settings.get("auto_pull_interval_minutes", 60)
+    def safe_after(self, delay, cb):
+        try:
+            if self.winfo_exists():
+                return self.after(delay, cb)
+        except Exception:
+            pass
+        return None
 
-        if not is_enabled or interval_mins <= 0:
-            if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
-                self.dashboard_view.cooldown_label.configure(text="Auto Pull: Disabled (ปิด)", text_color="gray")
-        elif self.is_auto_pulling:
-            lines = g_settings.get("auto_pull_lines", [])
-            lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
-            if hasattr(self, "dashboard_view") and hasattr(self.dashboard_view, "cooldown_label"):
-                self.dashboard_view.cooldown_label.configure(text=f"🔄 Auto Pull: In Progress{lines_str}...", text_color="#FFA726")
-        elif self.next_pull_time > 0:
-            remaining = int(self.next_pull_time - time.time())
-            lines = g_settings.get("auto_pull_lines", [])
-            if not lines:
-                self.dashboard_view.cooldown_label.configure(text="Auto Pull: No Lines Selected (ยังไม่เลือก Line)", text_color="#FFA726")
-            elif remaining > 0:
-                mins, secs = divmod(remaining, 60)
+    def update_cooldown_ui(self):
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
+
+        try:
+            g_settings = self.config_manager.get().get("global_settings", {})
+            is_enabled = g_settings.get("auto_pull_enabled", True)
+            interval_mins = g_settings.get("auto_pull_interval_minutes", 60)
+
+            c_label = getattr(self.dashboard_view, "cooldown_label", None)
+            has_label = c_label is not None and c_label.winfo_exists()
+
+            if not is_enabled or interval_mins <= 0:
+                if has_label:
+                    c_label.configure(text="Auto Pull: Disabled (ปิด)", text_color="gray")
+            elif self.is_auto_pulling:
+                lines = g_settings.get("auto_pull_lines", [])
                 lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
-                self.dashboard_view.cooldown_label.configure(text=f"Next Auto Pull{lines_str} in: {mins:02d}:{secs:02d}", text_color="#3B8ED0")
-            else:
-                lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
-                self.dashboard_view.cooldown_label.configure(text=f"🔄 Pulling{lines_str}...", text_color="#FFA726")
-        self.after(1000, self.update_cooldown_ui)
+                if has_label:
+                    c_label.configure(text=f"🔄 Auto Pull: In Progress{lines_str}...", text_color="#FFA726")
+            elif self.next_pull_time > 0:
+                remaining = int(self.next_pull_time - time.time())
+                lines = g_settings.get("auto_pull_lines", [])
+                if not lines:
+                    if has_label:
+                        c_label.configure(text="Auto Pull: No Lines Selected (ยังไม่เลือก Line)", text_color="#FFA726")
+                elif remaining > 0:
+                    mins, secs = divmod(remaining, 60)
+                    lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
+                    if has_label:
+                        c_label.configure(text=f"Next Auto Pull{lines_str} in: {mins:02d}:{secs:02d}", text_color="#3B8ED0")
+                else:
+                    lines_str = f" ({len(lines)} Line{'s' if len(lines) != 1 else ''})"
+                    if has_label:
+                        c_label.configure(text=f"🔄 Pulling{lines_str}...", text_color="#FFA726")
+        except Exception:
+            pass
+        self.safe_after(1000, self.update_cooldown_ui)
 
     def trigger_auto_pull(self):
         g_settings = self.config_manager.get().get("global_settings", {})
