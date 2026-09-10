@@ -46,6 +46,51 @@ class TestFTPService(unittest.TestCase):
         self.assertEqual(result, ["010525.txt", "020525.txt"])
         self.assertTrue(any("502 PASV not implemented" in log for log in logs))
 
+    def test_cancel_and_disconnect(self):
+        import socket
+        downloader = FTPDownloader(
+            host="127.0.0.1",
+            port=21,
+            username="user",
+            password="pwd",
+            machines=[{"name": "MC1", "remote_dir": "/MEMCARD"}],
+            local_target_dir="./downloads",
+            file_extensions=[".txt"],
+            separate_by_date=False,
+            plc_name="LINE 1"
+        )
+        mock_ftp = MagicMock()
+        mock_sock = MagicMock()
+        mock_ftp.sock = mock_sock
+        downloader.ftp = mock_ftp
+        downloader.is_running = True
+
+        downloader.cancel()
+
+        self.assertFalse(downloader.is_running)
+        mock_sock.settimeout.assert_called()
+        mock_ftp.abort.assert_called_once()
+        mock_ftp.quit.assert_called_once()
+        mock_sock.shutdown.assert_called_with(socket.SHUT_RDWR)
+        mock_sock.close.assert_called_once()
+        self.assertIsNone(downloader.ftp)
+
+    def test_stop_delegates_to_cancel(self):
+        downloader = FTPDownloader(
+            host="127.0.0.1",
+            port=21,
+            username="user",
+            password="pwd",
+            machines=[{"name": "MC1", "remote_dir": "/MEMCARD"}],
+            local_target_dir="./downloads",
+            file_extensions=[".txt"],
+            separate_by_date=False,
+            plc_name="LINE 1"
+        )
+        downloader.cancel = MagicMock()
+        downloader.stop()
+        downloader.cancel.assert_called_once()
+
     def test_live_connection_if_available(self):
         try:
             ok, msg = test_connection("192.168.1.169", 21, "user", "156900", timeout=2)

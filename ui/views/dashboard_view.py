@@ -19,6 +19,7 @@ class DashboardView(ctk.CTkFrame):
         self.request_timer_reset_cb = request_timer_reset_cb
         self.plc_download_callbacks = []
         self.plc_download_by_name = {}
+        self.active_downloaders = {}
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
@@ -152,7 +153,22 @@ class DashboardView(ctk.CTkFrame):
             self.config_manager.update_global_settings({"target_directory": folder})
             logger.info(f"Target save directory updated to: {folder}")
 
+    def has_active_downloads(self) -> bool:
+        return len(self.active_downloaders) > 0
+
+    def stop_all_downloads(self):
+        for name, dl in list(self.active_downloaders.items()):
+            try:
+                dl.cancel()
+            except Exception:
+                pass
+        self.active_downloaders.clear()
+
     def refresh_plcs(self):
+        if self.has_active_downloads():
+            logger.warning("Cannot refresh PLC cards while downloads are actively running.")
+            return
+
         self.plc_download_callbacks.clear()
         self.plc_download_by_name.clear()
         for w in self.scrollable_plc_frame.winfo_children():
@@ -406,60 +422,145 @@ class DashboardView(ctk.CTkFrame):
             ftp_mode=plc_data.get("ftp_mode", "auto")
         )
 
+        self.active_downloaders[plc_data['name']] = downloader
         start_time = time.time()
         is_running = [True]
 
-        def update_timer_ui():
-            if is_running[0] and timer_label:
-                elapsed = int(time.time() - start_time)
-                mins, secs = divmod(elapsed, 60)
-                timer_label.configure(text=f"⏱ {mins:02d}:{secs:02d}", text_color="#3B8ED0")
-                self.after(500, update_timer_ui)
+        def stop_this_download():
+            try:
+                if action_button and action_button.winfo_exists():
+                    action_button.configure(text="Stopping...", state="disabled")
+            except Exception:
+                pass
+            downloader.cancel()
 
-        if timer_label:
+        if action_button and action_button.winfo_exists():
+            action_button.configure(
+                text="🛑 Stop",
+                fg_color=("#D32F2F", "#C62828"),
+                hover_color=("#B71C1C", "#B71C1C"),
+                state="normal",
+                command=stop_this_download
+            )
+
+        def update_timer_ui():
+            if is_running[0]:
+                try:
+                    if timer_label and timer_label.winfo_exists():
+                        elapsed = int(time.time() - start_time)
+                        mins, secs = divmod(elapsed, 60)
+                        timer_label.configure(text=f"⏱ {mins:02d}:{secs:02d}", text_color="#3B8ED0")
+                        self.after(500, update_timer_ui)
+                except Exception:
+                    pass
+
+        if timer_label and timer_label.winfo_exists():
             timer_label.configure(text="⏱ 00:00", text_color="#3B8ED0")
             self.after(500, update_timer_ui)
 
-        if action_button:
-            action_button.configure(state="disabled")
-
         def update_progress(current, total):
             prog = current / total if total > 0 else 0
-            self.after(0, lambda: progress_bar.set(prog))
             pct = int(prog * 100)
-            if counter_label:
-                self.after(0, lambda: counter_label.configure(text=f"{current} / {total} files ({pct}%)"))
+            def _up():
+                try:
+                    if progress_bar and progress_bar.winfo_exists():
+                        progress_bar.set(prog)
+                    if counter_label and counter_label.winfo_exists():
+                        counter_label.configure(text=f"{current} / {total} files ({pct}%)")
+                except Exception:
+                    pass
+            self.after(0, _up)
 
         def log_cb(msg, level=None):
             self.after(0, lambda: logger.log(msg, level=level))
 
         def run():
-            self.after(0, lambda: status_label.configure(text="● Connecting...", text_color="#FFA726"))
-            if counter_label:
-                self.after(0, lambda: counter_label.configure(text="Connecting to FTP..."))
-            self.after(0, lambda: progress_bar.set(0))
+            def _init_ui():
+                try:
+                    if status_label and status_label.winfo_exists():
+                        status_label.configure(text="● Connecting...", text_color="#FFA726")
+                    if counter_label and counter_label.winfo_exists():
+                        counter_label.configure(text="Connecting to FTP...")
+                    if progress_bar and progress_bar.winfo_exists():
+                        progress_bar.set(0)
+                except Exception:
+                    pass
+            self.after(0, _init_ui)
             logger.info(f"Starting download for {plc_data['name']}...")
             try:
                 downloader.download_files(progress_callback=update_progress, log_callback=log_cb)
             finally:
+                self.active_downloaders.pop(plc_data['name'], None)
                 is_running[0] = False
                 elapsed = time.time() - start_time
                 mins, secs = divmod(int(elapsed), 60)
                 time_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.2f}s"
-                self.after(0, lambda: status_label.configure(text="● Finished", text_color="#00E676"))
-                if counter_label:
-                    self.after(0, lambda: counter_label.configure(text=f"Completed in {time_str}"))
-                if timer_label:
-                    self.after(0, lambda: timer_label.configure(text=f"⏱ {time_str}", text_color="#00E676"))
-                if action_button:
-                    self.after(0, lambda: action_button.configure(state="normal"))
-                if on_finish_callback:
-                    self.after(0, on_finish_callback)
+
+                def _restore_ui():
+                    try:
+                        was_cancelled = not downloader.is_running
+                        if status_label and status_label.winfo_exists():
+                            if was_cancelled:
+                                status_label.configure(text="● Stopped", text_color="#FFA726")
+                            else:
+                                status_label.configure(text="● Finished", text_color="#00E676")
+                        if counter_label and counter_label.winfo_exists():
+                            counter_label.configure(text="Cancelled" if was_cancelled else f"Completed in {time_str}")
+                        if timer_label and timer_label.winfo_exists():
+                            timer_label.configure(text=f"⏱ {time_str}", text_color="#FFA726" if was_cancelled else "#00E676")
+                        if action_button and action_button.winfo_exists():
+                            dl_trigger = self.plc_download_by_name.get(plc_data['name'])
+                            action_button.configure(
+                                text="⬇ Download",
+                                fg_color=("#3B8ED0", "#1F6AA5"),
+                                hover_color=("#36719F", "#144870"),
+                                state="normal",
+                                command=dl_trigger
+                            )
+                    except Exception:
+                        pass
+                    if on_finish_callback:
+                        on_finish_callback()
+
+                self.after(0, _restore_ui)
 
         threading.Thread(target=run, daemon=True).start()
 
     def download_all(self, on_complete=None):
-        self.download_selected_lines(None, on_complete=on_complete)
+        if self.has_active_downloads():
+            logger.warning("[Download All] Stopping all ongoing downloads...")
+            self.stop_all_downloads()
+            if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
+                self.btn_download_all.configure(
+                    text="📥 Download All",
+                    fg_color=("#1976D2", "#0D47A1"),
+                    hover_color=("#1565C0", "#0A3880")
+                )
+            return
+
+        if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
+            self.btn_download_all.configure(
+                text="🛑 Stop All",
+                fg_color=("#D32F2F", "#C62828"),
+                hover_color=("#B71C1C", "#B71C1C")
+            )
+
+        def _on_all_done():
+            def _reset_btn():
+                try:
+                    if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
+                        self.btn_download_all.configure(
+                            text="📥 Download All",
+                            fg_color=("#1976D2", "#0D47A1"),
+                            hover_color=("#1565C0", "#0A3880")
+                        )
+                except Exception:
+                    pass
+            self.after(0, _reset_btn)
+            if on_complete:
+                self.after(0, on_complete)
+
+        self.download_selected_lines(None, on_complete=_on_all_done)
 
     def download_selected_lines(self, target_line_names=None, on_complete=None):
         if target_line_names is None:

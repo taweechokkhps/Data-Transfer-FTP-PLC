@@ -98,6 +98,9 @@ class App(ctk.CTk):
         self.version_label.place(relx=1.0, rely=1.0, anchor="se", x=-20, y=-10)
         self.version_label.lift()
 
+        # Graceful exit handler
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
     def _maximize_window(self):
         try:
             self.state("zoomed")
@@ -106,6 +109,30 @@ class App(ctk.CTk):
                 self.attributes("-zoomed", True)
             except Exception:
                 pass
+
+    def on_closing(self):
+        """Cleanly terminates any active downloads, releases PLC sockets, and closes the app."""
+        try:
+            if self.auto_pull_job is not None:
+                self.after_cancel(self.auto_pull_job)
+                self.auto_pull_job = None
+        except Exception:
+            pass
+
+        if hasattr(self, "dashboard_view") and self.dashboard_view.has_active_downloads():
+            logger.warning("[App] Closing application during active downloads. Gracefully disconnecting from PLCs...")
+            try:
+                self.dashboard_view.stop_all_downloads()
+            except Exception as e:
+                logger.error(f"[App] Error terminating downloads: {e}")
+            # Give background socket teardown 250ms to dispatch TCP FIN packets to PLCs
+            time.sleep(0.25)
+
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        sys.exit(0)
 
     def select_view(self, view):
         self.dashboard_view.grid_forget()
@@ -118,7 +145,8 @@ class App(ctk.CTk):
         curr = self.config_manager.get()["global_settings"].get("target_directory", "")
         if curr and self.target_dir_var.get() != curr:
             self.target_dir_var.set(curr)
-        self.dashboard_view.refresh_plcs()
+        if not self.dashboard_view.has_active_downloads():
+            self.dashboard_view.refresh_plcs()
 
     def show_plc_manager(self):
         self.select_view(self.plc_manager_view)
@@ -136,7 +164,8 @@ class App(ctk.CTk):
         curr = self.config_manager.get()["global_settings"].get("target_directory", "")
         if curr:
             self.target_dir_var.set(curr)
-        self.dashboard_view.refresh_plcs()
+        if not self.dashboard_view.has_active_downloads():
+            self.dashboard_view.refresh_plcs()
 
     def start_auto_pull_timer(self):
         if self.auto_pull_job is not None:

@@ -323,9 +323,28 @@ class FTPDownloader:
                 return self.ftp.retrbinary(cmd, callback)
             raise
 
+    def cancel(self, log_callback=None):
+        """Cleanly and safely aborts active FTP transfer and terminates connection to Omron PLC."""
+        self.is_running = False
+        _emit_log(log_callback, f"[{self.plc_name}] 🛑 กำลังยกเลิกการดาวน์โหลด และปิดการเชื่อมต่อกับ PLC อย่างปลอดภัย...", "warning")
+        if self.ftp:
+            try:
+                # Attempt to send FTP ABOR command so Omron PLC halts data transfer immediately
+                if hasattr(self.ftp, 'sock') and self.ftp.sock:
+                    self.ftp.sock.settimeout(1.0)
+                self.ftp.abort()
+            except Exception:
+                pass
+            self.disconnect()
+
+    def stop(self):
+        self.cancel()
+
     def disconnect(self):
         if self.ftp:
             try:
+                if hasattr(self.ftp, 'sock') and self.ftp.sock:
+                    self.ftp.sock.settimeout(1.5)
                 self.ftp.quit()
             except Exception:
                 pass
@@ -570,6 +589,16 @@ class FTPDownloader:
                             time.sleep(0.15)
                             break
                         except Exception as e:
+                            # Clean up partial incomplete file on transfer error/cancellation
+                            if local_filepath.exists() and not csv_filepath.exists():
+                                try:
+                                    local_filepath.unlink(missing_ok=True)
+                                except Exception:
+                                    pass
+
+                            if not self.is_running:
+                                _emit_log(log_callback, f"[{self.plc_name}] 🛑 การดาวน์โหลดถูกยกเลิก และปิดการเชื่อมต่อกับ PLC เรียบร้อยแล้ว", "warning")
+                                break
                             if attempt < max_retries - 1 and self.is_running:
                                 _emit_log(log_callback, f"[{self.plc_name}][{m_name}] PLC กำลังบันทึกข้อมูลอยู่ ({pure_filename}) จะลองใหม่ใน 1.5 วินาที...", "warning")
                                 time.sleep(1.5)
@@ -585,7 +614,13 @@ class FTPDownloader:
             else:
                 dur_str = f"{elapsed:.3f}s ({total_ms:,.0f} ms)"
 
-            if error_count > 0:
+            if not self.is_running:
+                _emit_log(
+                    log_callback,
+                    f"[{self.plc_name}] 🛑 Download process stopped by user ({current_index}/{total_files} files).",
+                    "warning"
+                )
+            elif error_count > 0:
                 _emit_log(
                     log_callback,
                     f"[{self.plc_name}] ❌ Download process completed with {error_count} error(s) in {dur_str} ({current_index}/{total_files} files).",
@@ -598,12 +633,12 @@ class FTPDownloader:
                     "completed"
                 )
         except Exception as e:
-            _emit_log(log_callback, f"[{self.plc_name}] ❌ FTP Error: {e}", "error")
+            if not self.is_running:
+                _emit_log(log_callback, f"[{self.plc_name}] 🛑 การดาวน์โหลดถูกยกเลิก และปิดการเชื่อมต่อกับ PLC เรียบร้อยแล้ว", "warning")
+            else:
+                _emit_log(log_callback, f"[{self.plc_name}] ❌ FTP Error: {e}", "error")
         finally:
             self.disconnect()
             self.is_running = False
 
         return True
-
-    def stop(self):
-        self.is_running = False
