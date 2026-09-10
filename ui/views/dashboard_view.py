@@ -347,7 +347,7 @@ class DashboardView(ctk.CTkFrame):
             counter_lbl = ctk.CTkLabel(
                 mid_row,
                 text="พร้อมดาวน์โหลด",
-                width=140,
+                width=210,
                 anchor="e",
                 font=ctk.CTkFont(size=11),
                 text_color=("#888888", "#757575")
@@ -467,7 +467,7 @@ class DashboardView(ctk.CTkFrame):
             timer_label.configure(text="⏱ 00:00", text_color="#3B8ED0")
             self.safe_after(500, update_timer_ui)
 
-        def update_progress(current, total):
+        def update_progress(current, total, remaining=0, eta_str=""):
             prog = current / total if total > 0 else 0
             pct = int(prog * 100)
             def _up():
@@ -475,7 +475,10 @@ class DashboardView(ctk.CTkFrame):
                     if progress_bar and progress_bar.winfo_exists():
                         progress_bar.set(prog)
                     if counter_label and counter_label.winfo_exists():
-                        counter_label.configure(text=f"{current} / {total} files ({pct}%)")
+                        if remaining > 0 and eta_str:
+                            counter_label.configure(text=f"{current}/{total} ({pct}%) • เหลือ {remaining} ({eta_str})")
+                        else:
+                            counter_label.configure(text=f"{current} / {total} files ({pct}%)")
                 except Exception:
                     pass
             self.safe_after(0, _up)
