@@ -91,6 +91,35 @@ class TestFTPService(unittest.TestCase):
         downloader.stop()
         downloader.cancel.assert_called_once()
 
+    def test_calculate_download_eta_warmup(self):
+        from core.ftp_service import calculate_download_eta
+        # 0 or 1 file downloaded -> warm-up
+        self.assertEqual(calculate_download_eta(remaining=10, actual_durations=[]), "คำนวณ...")
+        self.assertEqual(calculate_download_eta(remaining=10, actual_durations=[1.0]), "คำนวณ...")
+
+    def test_calculate_download_eta_minutes_and_seconds(self):
+        from core.ftp_service import calculate_download_eta
+        # 20 files remaining, average 10s per file -> 200s -> ~3m
+        self.assertEqual(calculate_download_eta(remaining=20, actual_durations=[10.0, 10.0]), "~3m")
+        # 2 files remaining, average 15s per file -> 30s -> ~30s
+        self.assertEqual(calculate_download_eta(remaining=2, actual_durations=[15.0, 15.0]), "~30s")
+        # 0 files remaining -> empty
+        self.assertEqual(calculate_download_eta(remaining=0, actual_durations=[1.0, 1.0]), "")
+
+    def test_emit_progress_backwards_compatible(self):
+        from core.ftp_service import _emit_progress
+        # 2-arg callback
+        called_2 = []
+        _emit_progress(lambda c, t: called_2.append((c, t)), 10, 20, 10, "~1m")
+        self.assertEqual(called_2, [(10, 20)])
+
+        # 4-arg keyword callback
+        called_4 = []
+        def rich_cb(c, t, remaining=0, eta_str=""):
+            called_4.append((c, t, remaining, eta_str))
+        _emit_progress(rich_cb, 10, 20, 10, "~1m")
+        self.assertEqual(called_4, [(10, 20, 10, "~1m")])
+
     def test_live_connection_if_available(self):
         try:
             ok, msg = test_connection("192.168.1.169", 21, "user", "156900", timeout=2)

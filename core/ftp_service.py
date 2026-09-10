@@ -237,6 +237,36 @@ def _emit_log(callback, message: str, level: str = "info"):
     except TypeError:
         callback(message)
 
+def calculate_download_eta(remaining: int, actual_durations: list[float]) -> str:
+    """Calculates compact ETA string (Format B-2) using sliding average of recent actual download times."""
+    if remaining <= 0:
+        return ""
+    if len(actual_durations) < 2:
+        return "คำนวณ..."
+    # Sliding average of up to 10 most recent downloaded files
+    recent = actual_durations[-10:]
+    avg_sec = sum(recent) / len(recent)
+    eta_sec = remaining * avg_sec
+    if eta_sec >= 60:
+        mins = max(1, round(eta_sec / 60))
+        return f"~{mins}m"
+    secs = max(1, int(eta_sec))
+    return f"~{secs}s"
+
+def _emit_progress(cb, current: int, total: int, remaining: int = 0, eta_str: str = ""):
+    if not cb:
+        return
+    try:
+        cb(current, total, remaining=remaining, eta_str=eta_str)
+    except TypeError:
+        try:
+            cb(current, total, remaining, eta_str)
+        except TypeError:
+            try:
+                cb(current, total)
+            except Exception:
+                pass
+
 import atexit
 
 _active_downloaders = set()
@@ -493,6 +523,7 @@ class FTPDownloader:
 
             total_files = len(total_target_files)
             current_index = 0
+            actual_durations = []
 
             for m_name, (r_dir, t_files, batch_folder_name) in files_by_machine.items():
                 if not self.is_running:
@@ -545,8 +576,8 @@ class FTPDownloader:
                     else:
                         _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ตรวจพบไฟล์ซ้ำ {len(skipped_files)} ไฟล์ (ข้ามการดาวน์โหลด)", "info")
                     current_index += len(skipped_files)
-                    if progress_callback:
-                        progress_callback(current_index, total_files)
+                    remaining_files = max(0, total_files - current_index)
+                    _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
 
                 # Process downloads for new/updated files
                 for filename, pure_filename, local_filepath, csv_filepath in to_download:
@@ -564,15 +595,15 @@ class FTPDownloader:
                         if not fins_ok:
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ⚠️ ไม่สามารถตรวจสอบโหมดเครื่องจักรได้ ({fins_msg}) ข้ามการดาวน์โหลดไฟล์วันปัจจุบัน ({pure_filename}) เพื่อความปลอดภัย", "warning")
                             current_index += 1
-                            if progress_callback:
-                                progress_callback(current_index, total_files)
+                            remaining_files = max(0, total_files - current_index)
+                            _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
                             continue
 
                         if is_auto:
                             _emit_log(log_callback, f"[{self.plc_name}][{m_name}] ⚠️ เครื่องจักรกำลังทำงานในโหมด AUTO แนะนำให้เปลี่ยนเป็นโหมด MANUAL ก่อนดาวน์โหลดไฟล์วันปัจจุบัน (ข้าม {pure_filename})", "warning")
                             current_index += 1
-                            if progress_callback:
-                                progress_callback(current_index, total_files)
+                            remaining_files = max(0, total_files - current_index)
+                            _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
                             continue
 
                     _emit_log(log_callback, f"[{self.plc_name}][{m_name}] กำลังดาวน์โหลด: {pure_filename}", "info")
@@ -603,8 +634,9 @@ class FTPDownloader:
                                 _emit_log(log_callback, f"[{self.plc_name}][{m_name}] Warning: CSV conversion failed for {pure_filename}: {conv_err}", "warning")
 
                             current_index += 1
-                            if progress_callback:
-                                progress_callback(current_index, total_files)
+                            actual_durations.append(f_dur_ms / 1000.0)
+                            remaining_files = max(0, total_files - current_index)
+                            _emit_progress(progress_callback, current_index, total_files, remaining_files, calculate_download_eta(remaining_files, actual_durations))
 
                             # Industrial Safe Pacing Delay (150ms interruptible):
                             for _ in range(15):
