@@ -316,10 +316,15 @@ class PLCManagerView(ctk.CTkFrame):
             test_status_lbl.configure(text="Testing connection...", text_color="gray")
             def run():
                 ok, msg = test_connection(h, p, u, pw, ftp_mode=m)
-                if ok:
-                    dialog.after(0, lambda: test_status_lbl.configure(text="✓ Connection Successful!", text_color="#00E676"))
-                else:
-                    dialog.after(0, lambda: test_status_lbl.configure(text=f"✗ {msg}", text_color="#FF5252"))
+                try:
+                    if not dialog.winfo_exists():
+                        return
+                    if ok:
+                        dialog.after(0, lambda: test_status_lbl.winfo_exists() and test_status_lbl.configure(text="✓ Connection Successful!", text_color="#00E676"))
+                    else:
+                        dialog.after(0, lambda: test_status_lbl.winfo_exists() and test_status_lbl.configure(text=f"✗ {msg}", text_color="#FF5252"))
+                except Exception:
+                    pass
             threading.Thread(target=run, daemon=True).start()
 
         btn_test = ctk.CTkButton(conn_frame, text="🔌 Test Connection", command=do_test)
@@ -374,8 +379,12 @@ class PLCManagerView(ctk.CTkFrame):
                 init_d = dir_ent.get().strip() or "/"
                 if h:
                     def on_dir_selected(sel):
-                        dir_ent.delete(0, "end")
-                        dir_ent.insert(0, sel)
+                        try:
+                            if dir_ent.winfo_exists():
+                                dir_ent.delete(0, "end")
+                                dir_ent.insert(0, sel)
+                        except Exception:
+                            pass
                     FTPBrowserDialog(dialog, h, p, u, pw, initial_dir=init_d, on_select_callback=on_dir_selected, ftp_mode=m)
                 else:
                     test_status_lbl.configure(text="⚠️ กรุณาระบุ IP Address ก่อนเปิดดูโฟลเดอร์บน PLC", text_color="#FFA726")

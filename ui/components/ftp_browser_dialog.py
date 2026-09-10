@@ -151,171 +151,216 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         self.load_directory(self.current_dir)
 
     def load_directory(self, target_dir):
-        self.status_label.configure(text=f"Loading...", text_color="#FFA726")
-        for w in self.content_frame.winfo_children():
-            w.destroy()
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
 
-        loading_lbl = ctk.CTkLabel(
-            self.content_frame,
-            text="⏳ Fetching directory listing from PLC...",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        )
-        loading_lbl.pack(pady=30)
+        try:
+            self.status_label.configure(text=f"Loading...", text_color="#FFA726")
+            for w in self.content_frame.winfo_children():
+                w.destroy()
+
+            loading_lbl = ctk.CTkLabel(
+                self.content_frame,
+                text="⏳ Fetching directory listing from PLC...",
+                font=ctk.CTkFont(size=12),
+                text_color="gray"
+            )
+            loading_lbl.pack(pady=30)
+        except Exception:
+            return
 
         def worker():
             ok, res = list_remote_items(
                 self.host, self.port, self.username, self.password, target_dir, ftp_mode=self.ftp_mode
             )
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:
+                return
+
             if ok:
-                self.after(0, lambda: self._on_load_success(res))
+                try:
+                    self.after(0, lambda: self._on_load_success(res))
+                except Exception:
+                    pass
             else:
-                self.after(0, lambda: self._on_load_fail(str(res), target_dir))
+                try:
+                    self.after(0, lambda: self._on_load_fail(str(res), target_dir))
+                except Exception:
+                    pass
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_load_success(self, data):
-        self.current_dir = data.get("current_dir", "/")
-        folders = data.get("folders", [])
-        files = data.get("files", [])
-
-        self.path_entry.delete(0, "end")
-        self.path_entry.insert(0, self.current_dir)
-        self.sel_preview_lbl.configure(text=self.current_dir)
-
-        total_cnt = len(folders) + len(files)
-        self.status_label.configure(
-            text=f"Found {len(folders)} folder(s), {len(files)} file(s)",
-            text_color="#00E676"
-        )
-
-        for w in self.content_frame.winfo_children():
-            w.destroy()
-
-        if not folders and not files:
-            ctk.CTkLabel(
-                self.content_frame,
-                text="📂 (Directory is empty / โฟลเดอร์ว่าง)",
-                font=ctk.CTkFont(size=13),
-                text_color="gray"
-            ).pack(pady=35)
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
             return
 
-        # --- A. FOLDERS SECTION ---
-        if folders:
-            f_hdr = ctk.CTkLabel(
-                self.content_frame,
-                text=f"📁 Folders ({len(folders)}):",
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color=("#666666", "#9E9E9E")
-            )
-            f_hdr.pack(anchor="w", padx=6, pady=(4, 2))
+        try:
+            self.current_dir = data.get("current_dir", "/")
+            folders = data.get("folders", [])
+            files = data.get("files", [])
 
-            for name in folders:
-                row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-                row.pack(fill="x", padx=4, pady=2)
+            if hasattr(self, "path_entry") and self.path_entry.winfo_exists():
+                self.path_entry.delete(0, "end")
+                self.path_entry.insert(0, self.current_dir)
+            if hasattr(self, "sel_preview_lbl") and self.sel_preview_lbl.winfo_exists():
+                self.sel_preview_lbl.configure(text=self.current_dir)
 
-                btn = ctk.CTkButton(
-                    row,
-                    text=f"📁 {name}/",
-                    anchor="w",
-                    height=32,
-                    fg_color=("gray95", "gray20"),
-                    hover_color=("#E0E0E0", "#383838"),
-                    text_color=("#1565C0", "#64B5F6"),
-                    font=ctk.CTkFont(size=12, weight="bold"),
-                    command=lambda n=name: self.navigate_into(n)
+            total_cnt = len(folders) + len(files)
+            if hasattr(self, "status_label") and self.status_label.winfo_exists():
+                self.status_label.configure(
+                    text=f"Found {len(folders)} folder(s), {len(files)} file(s)",
+                    text_color="#00E676"
                 )
-                btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-                if self.on_select_callback:
-                    sub_path = sanitize_remote_path(f"{self.current_dir.rstrip('/')}/{name}")
-                    btn_select_this = ctk.CTkButton(
-                        row,
-                        text="Choose ➔",
-                        width=80,
-                        height=30,
+            if hasattr(self, "content_frame") and self.content_frame.winfo_exists():
+                for w in self.content_frame.winfo_children():
+                    w.destroy()
+
+                if not folders and not files:
+                    ctk.CTkLabel(
+                        self.content_frame,
+                        text="📂 (Directory is empty / โฟลเดอร์ว่าง)",
+                        font=ctk.CTkFont(size=13),
+                        text_color="gray"
+                    ).pack(pady=35)
+                    return
+
+                # --- A. FOLDERS SECTION ---
+                if folders:
+                    f_hdr = ctk.CTkLabel(
+                        self.content_frame,
+                        text=f"📁 Folders ({len(folders)}):",
                         font=ctk.CTkFont(size=11, weight="bold"),
-                        fg_color=("#E8F5E9", "#1B5E20"),
-                        hover_color=("#C8E6C9", "#2E7D32"),
-                        text_color=("#2E7D32", "#A5D6A7"),
-                        command=lambda p=sub_path: self.select_path(p)
+                        text_color=("#666666", "#9E9E9E")
                     )
-                    btn_select_this.pack(side="right")
+                    f_hdr.pack(anchor="w", padx=6, pady=(4, 2))
 
-        # --- B. FILES SECTION ---
-        if files:
-            file_hdr = ctk.CTkLabel(
-                self.content_frame,
-                text=f"📄 Files ({len(files)}):",
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color=("#666666", "#9E9E9E")
-            )
-            file_hdr.pack(anchor="w", padx=6, pady=(10 if folders else 4, 2))
+                    for name in folders:
+                        row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+                        row.pack(fill="x", padx=4, pady=2)
 
-            for item in files:
-                f_name = item.get("name", "")
-                f_size = item.get("size", 0)
-                size_str = _format_size(f_size)
+                        btn = ctk.CTkButton(
+                            row,
+                            text=f"📁 {name}/",
+                            anchor="w",
+                            height=32,
+                            fg_color=("gray95", "gray20"),
+                            hover_color=("#E0E0E0", "#383838"),
+                            text_color=("#1565C0", "#64B5F6"),
+                            font=ctk.CTkFont(size=12, weight="bold"),
+                            command=lambda n=name: self.navigate_into(n)
+                        )
+                        btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-                row = ctk.CTkFrame(self.content_frame, fg_color=("white", "gray17"), corner_radius=4, height=28)
-                row.pack(fill="x", padx=4, pady=1)
+                        if self.on_select_callback:
+                            sub_path = sanitize_remote_path(f"{self.current_dir.rstrip('/')}/{name}")
+                            btn_select_this = ctk.CTkButton(
+                                row,
+                                text="Choose ➔",
+                                width=80,
+                                height=30,
+                                font=ctk.CTkFont(size=11, weight="bold"),
+                                fg_color=("#E8F5E9", "#1B5E20"),
+                                hover_color=("#C8E6C9", "#2E7D32"),
+                                text_color=("#2E7D32", "#A5D6A7"),
+                                command=lambda p=sub_path: self.select_path(p)
+                            )
+                            btn_select_this.pack(side="right")
 
-                ctk.CTkLabel(
-                    row,
-                    text=f"📄 {f_name}",
-                    font=ctk.CTkFont(size=11),
-                    text_color=("#212121", "#E0E0E0")
-                ).pack(side="left", padx=(8, 4), pady=3)
+                # --- B. FILES SECTION ---
+                if files:
+                    file_hdr = ctk.CTkLabel(
+                        self.content_frame,
+                        text=f"📄 Files ({len(files)}):",
+                        font=ctk.CTkFont(size=11, weight="bold"),
+                        text_color=("#666666", "#9E9E9E")
+                    )
+                    file_hdr.pack(anchor="w", padx=6, pady=(10 if folders else 4, 2))
 
-                ctk.CTkLabel(
-                    row,
-                    text=size_str,
-                    font=ctk.CTkFont(size=10),
-                    text_color="gray"
-                ).pack(side="right", padx=(4, 10), pady=3)
+                    for item in files:
+                        f_name = item.get("name", "")
+                        f_size = item.get("size", 0)
+                        size_str = _format_size(f_size)
+
+                        row = ctk.CTkFrame(self.content_frame, fg_color=("white", "gray17"), corner_radius=4, height=28)
+                        row.pack(fill="x", padx=4, pady=1)
+
+                        ctk.CTkLabel(
+                            row,
+                            text=f"📄 {f_name}",
+                            font=ctk.CTkFont(size=11),
+                            text_color=("#212121", "#E0E0E0")
+                        ).pack(side="left", padx=(8, 4), pady=3)
+
+                        ctk.CTkLabel(
+                            row,
+                            text=size_str,
+                            font=ctk.CTkFont(size=10),
+                            text_color="gray"
+                        ).pack(side="right", padx=(4, 10), pady=3)
+        except Exception:
+            pass
 
     def _on_load_fail(self, err_msg, failed_dir=None):
-        self.status_label.configure(text="Connection Error", text_color="#FF5252")
-        for w in self.content_frame.winfo_children():
-            w.destroy()
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
 
-        err_box = ctk.CTkFrame(self.content_frame, fg_color=("#FFEBEE", "#3E2723"), corner_radius=8)
-        err_box.pack(fill="x", padx=10, pady=20)
+        try:
+            if hasattr(self, "status_label") and self.status_label.winfo_exists():
+                self.status_label.configure(text="Connection Error", text_color="#FF5252")
+            if hasattr(self, "content_frame") and self.content_frame.winfo_exists():
+                for w in self.content_frame.winfo_children():
+                    w.destroy()
 
-        ctk.CTkLabel(
-            err_box,
-            text=f"⚠️ Failed to browse PLC directory:\n{err_msg}",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#D32F2F",
-            wraplength=480
-        ).pack(padx=14, pady=12)
+                err_box = ctk.CTkFrame(self.content_frame, fg_color=("#FFEBEE", "#3E2723"), corner_radius=8)
+                err_box.pack(fill="x", padx=10, pady=20)
 
-        btn_row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        btn_row.pack(pady=6)
+                ctk.CTkLabel(
+                    err_box,
+                    text=f"⚠️ Failed to browse PLC directory:\n{err_msg}",
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    text_color="#D32F2F",
+                    wraplength=480
+                ).pack(padx=14, pady=12)
 
-        retry_target = failed_dir or self.current_dir
-        ctk.CTkButton(
-            btn_row,
-            text="🔄 Retry",
-            width=90,
-            command=lambda: self.load_directory(retry_target)
-        ).pack(side="left", padx=4)
+                btn_row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+                btn_row.pack(pady=6)
 
-        if failed_dir and failed_dir != self.current_dir:
-            ctk.CTkButton(
-                btn_row,
-                text="⬅ Stay on Current",
-                width=130,
-                command=lambda: self.load_directory(self.current_dir)
-            ).pack(side="left", padx=4)
+                retry_target = failed_dir or self.current_dir
+                ctk.CTkButton(
+                    btn_row,
+                    text="🔄 Retry",
+                    width=90,
+                    command=lambda: self.load_directory(retry_target)
+                ).pack(side="left", padx=4)
 
-        ctk.CTkButton(
-            btn_row,
-            text="🏠 Root",
-            width=80,
-            command=self.go_root
-        ).pack(side="left", padx=4)
+                if failed_dir and failed_dir != self.current_dir:
+                    ctk.CTkButton(
+                        btn_row,
+                        text="⬅ Stay on Current",
+                        width=130,
+                        command=lambda: self.load_directory(self.current_dir)
+                    ).pack(side="left", padx=4)
+
+                ctk.CTkButton(
+                    btn_row,
+                    text="🏠 Root",
+                    width=80,
+                    command=self.go_root
+                ).pack(side="left", padx=4)
+        except Exception:
+            pass
 
     def navigate_into(self, folder_name):
         new_path = sanitize_remote_path(f"{self.current_dir.rstrip('/')}/{folder_name}")
@@ -339,8 +384,15 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         try:
             self.clipboard_clear()
             self.clipboard_append(self.current_dir)
-            self.btn_copy.configure(text="✓ Copied!", fg_color="#2E7D32")
-            self.after(2000, lambda: self.btn_copy.configure(text="📋 Copy Path", fg_color=("#E0E0E0", "#333333")))
+            if hasattr(self, "btn_copy") and self.btn_copy.winfo_exists():
+                self.btn_copy.configure(text="✓ Copied!", fg_color="#2E7D32")
+            def reset_btn():
+                try:
+                    if self.winfo_exists() and hasattr(self, "btn_copy") and self.btn_copy.winfo_exists():
+                        self.btn_copy.configure(text="📋 Copy Path", fg_color=("#E0E0E0", "#333333"))
+                except Exception:
+                    pass
+            self.after(2000, reset_btn)
         except Exception:
             pass
 
