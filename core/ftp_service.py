@@ -237,6 +237,22 @@ def _emit_log(callback, message: str, level: str = "info"):
     except TypeError:
         callback(message)
 
+import atexit
+
+_active_downloaders = set()
+
+def cleanup_all_active_connections():
+    """Emergency shutdown handler: releases all active PLC sockets immediately upon process exit."""
+    active = list(_active_downloaders)
+    for dl in active:
+        try:
+            dl.is_running = False
+            dl.cancel()
+        except Exception:
+            pass
+
+atexit.register(cleanup_all_active_connections)
+
 class FTPDownloader:
     def __init__(self, host, port, username, password, machines, local_target_dir, file_extensions, separate_by_date, plc_name, date_filter=None, ftp_mode="auto"):
         self.host = host
@@ -285,6 +301,7 @@ class FTPDownloader:
                 if hasattr(self.ftp, 'sock') and self.ftp.sock:
                     self.ftp.sock.settimeout(60.0)
             self.ftp.set_debuglevel(0)
+            _active_downloaders.add(self)
             return True, "Connected successfully."
         except Exception as e:
             self.disconnect()
@@ -326,6 +343,7 @@ class FTPDownloader:
     def cancel(self, log_callback=None):
         """Cleanly and safely aborts active FTP transfer and terminates connection to Omron PLC."""
         self.is_running = False
+        _active_downloaders.discard(self)
         _emit_log(log_callback, f"[{self.plc_name}] 🛑 กำลังยกเลิกการดาวน์โหลด และปิดการเชื่อมต่อกับ PLC อย่างปลอดภัย...", "warning")
         if self.ftp:
             try:
@@ -341,6 +359,7 @@ class FTPDownloader:
         self.cancel()
 
     def disconnect(self):
+        _active_downloaders.discard(self)
         if self.ftp:
             try:
                 if hasattr(self.ftp, 'sock') and self.ftp.sock:
