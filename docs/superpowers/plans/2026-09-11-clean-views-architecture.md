@@ -28,28 +28,28 @@
 - Produces: `QuickDateFilterDialog(parent, plc_name, current_filter, on_save_callback)`
 - Produces: `PLCModalDialog(parent, config_manager, plc_data=None, index=None, on_save_callback=None)`
 
-- [ ] **Step 1: Create `ui/components/quick_date_filter_dialog.py`**
+- [x] **Step 1: Create `ui/components/quick_date_filter_dialog.py`**
 
 Extract `QuickDateFilterDialog` from `ui/views/dashboard_view.py` (lines 35-180) into standalone component file with its imports.
 
-- [ ] **Step 2: Create `ui/components/plc_modal_dialog.py`**
+- [x] **Step 2: Create `ui/components/plc_modal_dialog.py`**
 
 Extract `PLCModalDialog` from `ui/views/plc_manager_view.py` (lines 270-550) into standalone component file with its imports.
 
-- [ ] **Step 3: Update `ui/components/__init__.py`**
+- [x] **Step 3: Update `ui/components/__init__.py`**
 
 Export `QuickDateFilterDialog` and `PLCModalDialog` from `ui/components`.
 
-- [ ] **Step 4: Update imports in `dashboard_view.py` and `plc_manager_view.py`**
+- [x] **Step 4: Update imports in `dashboard_view.py` and `plc_manager_view.py`**
 
 Import `QuickDateFilterDialog` in `dashboard_view.py` and `PLCModalDialog` in `plc_manager_view.py`.
 
-- [ ] **Step 5: Run unit tests to verify no import regressions**
+- [x] **Step 5: Run unit tests to verify no import regressions**
 
 Run: `python -m unittest discover -s tests`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add ui/components/ ui/views/
@@ -72,32 +72,32 @@ git commit -m "refactor(components): extract QuickDateFilterDialog and PLCModalD
 - Produces: `SettingsController(config_manager, logger)` with `save_settings(data)`, `reset_defaults()`, `browse_target_dir()`
 - Produces: `PLCManagerController(config_manager, logger)` with `validate_plc(data)`, `delete_plc(index)`, `test_connection(host, port, user, pwd, timeout, mode)`
 
-- [ ] **Step 1: Write unit tests for `SettingsController` and `PLCManagerController`**
+- [x] **Step 1: Write unit tests for `SettingsController` and `PLCManagerController`**
 
 In `tests/test_controllers.py`:
 - Test settings validation and save logic
 - Test PLC validation (validating host, port, machine names)
 - Test PLC delete logic
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m unittest tests/test_controllers.py`
 Expected: FAIL (modules not found)
 
-- [ ] **Step 3: Implement `SettingsController` and `PLCManagerController`**
+- [x] **Step 3: Implement `SettingsController` and `PLCManagerController`**
 
 Create `ui/controllers/settings_controller.py` and `ui/controllers/plc_manager_controller.py`.
 
-- [ ] **Step 4: Refactor `settings_view.py` and `plc_manager_view.py` to use controllers**
+- [x] **Step 4: Refactor `settings_view.py` and `plc_manager_view.py` to use controllers**
 
 Delegate action events in `SettingsView` and `PLCManagerView` to their respective controllers.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `python -m unittest discover -s tests`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add ui/controllers/ ui/views/ tests/test_controllers.py
@@ -117,24 +117,24 @@ git commit -m "refactor(controllers): implement SettingsController and PLCManage
 **Interfaces:**
 - Produces: `DashboardController(config_manager, logger)` with `download_single(...)`, `download_all(...)`, `stop_all(...)`, `test_connection(...)`
 
-- [ ] **Step 1: Add unit tests for `DashboardController` in `tests/test_controllers.py`**
+- [x] **Step 1: Add unit tests for `DashboardController` in `tests/test_controllers.py`**
 
 Test single download coordination, state tracking, and stop handling.
 
-- [ ] **Step 2: Implement `DashboardController` in `ui/controllers/dashboard_controller.py`**
+- [x] **Step 2: Implement `DashboardController` in `ui/controllers/dashboard_controller.py`**
 
 Move `download_single`, `download_all`, `download_selected_lines`, `test_single_connection`, and timer tracking from `dashboard_view.py` into `DashboardController`.
 
-- [ ] **Step 3: Refactor `dashboard_view.py`**
+- [x] **Step 3: Refactor `dashboard_view.py`**
 
 Clean up `dashboard_view.py` to focus solely on building the card layouts, progress bars, and wiring buttons to `self.controller`.
 
-- [ ] **Step 4: Run full unit test suite**
+- [x] **Step 4: Run full unit test suite**
 
 Run: `python -m unittest discover -s tests`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add ui/controllers/ ui/views/dashboard_view.py tests/test_controllers.py
@@ -145,15 +145,15 @@ git commit -m "refactor(controllers): implement DashboardController and decouple
 
 ### Task 4: Full Regression & Integration Verification
 
-- [ ] **Step 1: Run complete test suite**
+- [x] **Step 1: Run complete test suite**
 
 Run: `python -m unittest discover -s tests`
 Expected: ALL PASS
 
-- [ ] **Step 2: Verify git status and diff**
+- [x] **Step 2: Verify git status and diff**
 
 Ensure all new and modified files are committed and clean.
 
-- [ ] **Step 3: Update documentation and artifacts**
+- [x] **Step 3: Update documentation and artifacts**
 
 Update `task.md` with refactoring summary and architectural metrics.
