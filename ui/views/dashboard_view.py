@@ -1,83 +1,79 @@
 import customtkinter as ctk
-import threading
-import time
-import os
-import subprocess
 from pathlib import Path
 from tkinter import filedialog
-from core.ftp_service import test_connection, FTPDownloader
 from core.logger import logger
 from ui.components.tooltip import ToolTip
 from ui.components.log_console import LogConsole
 from ui.components.quick_date_filter_dialog import QuickDateFilterDialog
+from ui.controllers.dashboard_controller import DashboardController
 
 class DashboardView(ctk.CTkFrame):
-    def __init__(self, master, config_manager, target_dir_var=None, request_timer_reset_cb=None, **kwargs):
+    """View rendering the Download Overview dashboard, PLC status cards, and live logs."""
+
+    def __init__(self, master, config_manager, target_dir_var=None, request_timer_reset_cb=None, controller=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.config_manager = config_manager
+        self.controller = controller or DashboardController(self.config_manager)
         self.target_dir_var = target_dir_var
         self.request_timer_reset_cb = request_timer_reset_cb
-        self.plc_download_callbacks = []
-        self.plc_download_by_name = {}
-        self.active_downloaders = {}
-        
+
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
-        
+
         # 1. Header Frame
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.grid(row=0, column=0, padx=16, pady=(12, 8), sticky="ew")
-        
+
         header_title = ctk.CTkLabel(
-            header_frame, 
-            text="Download Overview", 
+            header_frame,
+            text="Download Overview",
             font=ctk.CTkFont(size=22, weight="bold")
         )
         header_title.pack(side="left")
-        
+
         self.summary_badge = ctk.CTkLabel(
-            header_frame, 
-            text="", 
+            header_frame,
+            text="",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="gray"
         )
         self.summary_badge.pack(side="right")
-        
+
         # 2. Target Save Directory Bar
         dest_card = ctk.CTkFrame(self, corner_radius=10)
         dest_card.grid(row=1, column=0, padx=16, pady=(0, 10), sticky="ew")
-        
+
         ctk.CTkLabel(
-            dest_card, 
-            text="📁 Target Directory:", 
+            dest_card,
+            text="📁 Target Directory:",
             font=ctk.CTkFont(size=12, weight="bold")
         ).pack(side="left", padx=(14, 8), pady=10)
-        
+
         if self.target_dir_var is None:
             init_target = self.config_manager.get().get("global_settings", {}).get("target_directory", "")
             if not init_target:
                 init_target = str(Path.home() / "Desktop" / "PLC_Downloads").replace("\\", "/")
                 self.config_manager.update_global_settings({"target_directory": init_target})
             self.target_dir_var = ctk.StringVar(value=init_target)
-            
+
         self.target_dir_entry = ctk.CTkEntry(
-            dest_card, 
-            textvariable=self.target_dir_var, 
-            height=32, 
+            dest_card,
+            textvariable=self.target_dir_var,
+            height=32,
             font=ctk.CTkFont(size=12),
             placeholder_text="e.g. C:/PLC_Logs or D:/Production_Data"
         )
         self.target_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=10)
         self.target_dir_entry.bind(
-            "<FocusOut>", 
+            "<FocusOut>",
             lambda e: self.config_manager.update_global_settings({"target_directory": self.target_dir_var.get().strip()})
         )
-        
+
         btn_open = ctk.CTkButton(
-            dest_card, 
-            text="📂 Open Folder", 
-            width=105, 
-            height=32, 
+            dest_card,
+            text="📂 Open Folder",
+            width=105,
+            height=32,
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color=("#E0E0E0", "#333333"),
             hover_color=("#D5D5D5", "#444444"),
@@ -88,72 +84,63 @@ class DashboardView(ctk.CTkFrame):
         ToolTip(btn_open, "เปิดโฟลเดอร์ปลายทางใน Windows Explorer")
 
         btn_browse_dest = ctk.CTkButton(
-            dest_card, 
-            text="🔍 Browse...", 
-            width=90, 
-            height=32, 
-            font=ctk.CTkFont(size=12, weight="bold"), 
+            dest_card,
+            text="🔍 Browse...",
+            width=90,
+            height=32,
+            font=ctk.CTkFont(size=12, weight="bold"),
             command=self.browse_dest_dir
         )
         btn_browse_dest.pack(side="right", padx=(0, 8), pady=10)
         ToolTip(btn_browse_dest, "เลือกโฟลเดอร์สำหรับบันทึกไฟล์")
-        
+
         # 3. Scrollable Connected PLCs Frame
         self.scrollable_plc_frame = ctk.CTkScrollableFrame(self, label_text="Connected PLCs", corner_radius=10)
         self.scrollable_plc_frame.grid(row=2, column=0, padx=16, pady=5, sticky="nsew")
-        
+
         # 4. Action Controls Toolbar (Above Log Console)
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.grid(row=3, column=0, padx=16, pady=(8, 8), sticky="ew")
-        
+
         self.btn_download_all = ctk.CTkButton(
-            btn_frame, 
-            text="⬇  Download All PLCs", 
-            font=ctk.CTkFont(size=13, weight="bold"), 
-            text_color="white", 
+            btn_frame,
+            text="⬇  Download All PLCs",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="white",
             height=36,
             command=self.download_all
         )
         self.btn_download_all.pack(side="left", padx=(0, 12))
-        
+
         self.cooldown_label = ctk.CTkLabel(
-            btn_frame, 
-            text="", 
-            text_color="gray", 
+            btn_frame,
+            text="",
+            text_color="gray",
             font=ctk.CTkFont(size=12, weight="bold")
         )
         self.cooldown_label.pack(side="left", padx=5)
-        
+
         # 5. Log Console Component
         self.log_console = LogConsole(self, height=180)
         self.log_console.grid(row=4, column=0, padx=16, pady=(0, 12), sticky="ew")
         logger.register_callback(self.log_console.append_message)
-        
+
         self.refresh_plcs()
 
-    def open_target_folder(self):
-        target_dir = self.target_dir_var.get().strip()
-        if not target_dir:
-            return
-        p = Path(target_dir)
-        try:
-            if not p.exists():
-                p.mkdir(parents=True, exist_ok=True)
-            if hasattr(os, "startfile"):
-                os.startfile(str(p))
-            else:
-                subprocess.Popen(["explorer", str(p)])
-        except Exception as e:
-            logger.error(f"Cannot open folder '{target_dir}': {e}")
+    @property
+    def plc_download_callbacks(self):
+        return self.controller.plc_download_callbacks
 
-    def browse_dest_dir(self):
-        folder = filedialog.askdirectory(title="Select Target Save Directory")
-        if folder:
-            self.target_dir_var.set(folder)
-            self.config_manager.update_global_settings({"target_directory": folder})
-            logger.info(f"Target save directory updated to: {folder}")
+    @property
+    def plc_download_by_name(self):
+        return self.controller.plc_download_by_name
+
+    @property
+    def active_downloaders(self):
+        return self.controller.active_downloaders
 
     def safe_after(self, delay, cb):
+        """Thread-safe after invocation on main loop."""
         try:
             if self.winfo_exists():
                 return self.after(delay, cb)
@@ -162,23 +149,29 @@ class DashboardView(ctk.CTkFrame):
         return None
 
     def has_active_downloads(self) -> bool:
-        return len(self.active_downloaders) > 0
+        return self.controller.has_active_downloads()
 
     def stop_all_downloads(self):
-        for name, dl in list(self.active_downloaders.items()):
-            try:
-                dl.cancel()
-            except Exception:
-                pass
-        self.active_downloaders.clear()
+        self.controller.stop_all_downloads()
+
+    def open_target_folder(self):
+        self.controller.open_target_folder(self.target_dir_var.get())
+
+    def browse_dest_dir(self):
+        initial = self.target_dir_var.get() if self.target_dir_var else ""
+        folder = filedialog.askdirectory(title="Select Target Save Directory", initialdir=initial)
+        if folder:
+            self.target_dir_var.set(folder)
+            self.config_manager.update_global_settings({"target_directory": folder})
+            logger.info(f"Target save directory updated to: {folder}")
 
     def refresh_plcs(self):
+        """Rebuild PLC cards from config."""
         if self.has_active_downloads():
             logger.warning("Cannot refresh PLC cards while downloads are actively running.")
             return
 
-        self.plc_download_callbacks.clear()
-        self.plc_download_by_name.clear()
+        self.controller.clear_triggers()
         for w in self.scrollable_plc_frame.winfo_children():
             w.destroy()
 
@@ -200,17 +193,15 @@ class DashboardView(ctk.CTkFrame):
             return
 
         for idx, plc in enumerate(plcs):
-            # --- Card container ---
             card = ctk.CTkFrame(self.scrollable_plc_frame, corner_radius=10, fg_color=("#F5F5F5", "#212121"))
             card.pack(fill="x", padx=4, pady=5)
             card.grid_columnconfigure(0, weight=1)
 
-            # ======== ROW 0: PLC Info (left) + Action Buttons (right) ========
+            # Row 0: Info + Actions
             top_row = ctk.CTkFrame(card, fg_color="transparent")
             top_row.grid(row=0, column=0, padx=14, pady=(10, 4), sticky="ew")
             top_row.grid_columnconfigure(0, weight=1)
 
-            # -- PLC Name & Details --
             info_frame = ctk.CTkFrame(top_row, fg_color="transparent")
             info_frame.grid(row=0, column=0, sticky="w")
 
@@ -258,7 +249,6 @@ class DashboardView(ctk.CTkFrame):
             )
             sub_lbl.pack(anchor="w")
 
-            # -- Action Buttons + Date Badge (right): Test | Date | Download --
             action_frame = ctk.CTkFrame(top_row, fg_color="transparent")
             action_frame.grid(row=0, column=1, sticky="e")
 
@@ -274,7 +264,7 @@ class DashboardView(ctk.CTkFrame):
             )
             btn_test.pack(side="left", padx=(0, 6))
 
-            # Date Filter Badge (between Test and Download)
+            # Date Filter Badge
             df = plc.get("date_filter", {})
             if df.get("mode") == "range" and df.get("start_date") and df.get("end_date"):
                 df_badge = f"📅 {df['start_date']} ➔ {df['end_date']}"
@@ -325,7 +315,7 @@ class DashboardView(ctk.CTkFrame):
             )
             btn_dl.pack(side="left")
 
-            # ======== ROW 1: Status + Progress bar + Timer (full width) ========
+            # Row 1: Status + Progress bar + Timer
             mid_row = ctk.CTkFrame(card, fg_color="transparent")
             mid_row.grid(row=1, column=0, padx=14, pady=(0, 10), sticky="ew")
             mid_row.grid_columnconfigure(1, weight=1)
@@ -364,244 +354,154 @@ class DashboardView(ctk.CTkFrame):
             )
             timer_lbl.grid(row=0, column=3, sticky="e")
 
-            # -- Wire up button commands --
-            btn_test.configure(command=lambda p=plc, stat=status_badge, c_lbl=counter_lbl: self.test_single_connection(p, stat, c_lbl))
+            # Wire up button commands
+            btn_test.configure(
+                command=lambda p=plc, stat=status_badge, c_lbl=counter_lbl: self.test_single_connection(p, stat, c_lbl)
+            )
 
             def make_dl_trigger(p=plc, progress=pb, stat=status_badge, t_lbl=timer_lbl, c_lbl=counter_lbl, b=btn_dl):
-                return lambda on_finish=None: self.download_single(p, progress, stat, t_lbl, c_lbl, b, on_finish_callback=on_finish)
+                return lambda on_finish=None: self.download_single(
+                    p, progress, stat, t_lbl, c_lbl, b, on_finish_callback=on_finish
+                )
 
             dl_trigger = make_dl_trigger()
             btn_dl.configure(command=dl_trigger)
-            self.plc_download_callbacks.append(dl_trigger)
-            plc_name = plc.get("name")
-            if plc_name:
-                self.plc_download_by_name[plc_name] = dl_trigger
+            self.controller.register_download_trigger(plc.get("name"), dl_trigger)
 
     def test_single_connection(self, plc_data, status_label, counter_label=None):
-        def run():
-            status_label.configure(text="● Testing...", text_color="#FFA726")
-            if counter_label:
-                counter_label.configure(text="Checking FTP connection...")
-            ok, msg = test_connection(
-                plc_data['host'],
-                int(plc_data.get('port', 21)),
-                plc_data['username'],
-                plc_data['password'],
-                ftp_mode=plc_data.get('ftp_mode', 'auto')
-            )
-            if ok:
-                status_label.configure(text="● Conn OK", text_color="#00E676")
-                if counter_label:
-                    counter_label.configure(text="เชื่อมต่อสำเร็จ (Connection Success)")
-                logger.success(f"[{plc_data['name']}] Connection Test: Success")
-            else:
-                status_label.configure(text="● Conn Fail", text_color="#FF5252")
-                if counter_label:
-                    counter_label.configure(text="เชื่อมต่อล้มเหลว (Connection Failed)")
-                logger.error(f"[{plc_data['name']}] Connection Test: Failed ({msg})")
-        threading.Thread(target=run, daemon=True).start()
-
-    def download_single(self, plc_data, progress_bar, status_label, timer_label=None, counter_label=None, action_button=None, on_finish_callback=None):
-        g_settings = self.config_manager.get()["global_settings"]
-        target_dir = self.target_dir_var.get().strip() or g_settings.get("target_directory", "").strip()
-        if not target_dir:
-            target_dir = str(Path.home() / "Desktop" / "PLC_Downloads").replace("\\", "/")
-            self.target_dir_var.set(target_dir)
-            self.config_manager.update_global_settings({"target_directory": target_dir})
-            logger.info(f"Target save directory defaulted to: {target_dir}")
-
-        machines = plc_data.get('machines')
-        if not machines:
-            r_dirs_raw = plc_data.get('remote_directory', '')
-            remote_dirs = [d.strip() for d in r_dirs_raw.split(',') if d.strip()]
-            machines = [{"name": f"MC{i+1}", "remote_dir": d} for i, d in enumerate(remote_dirs)]
-
-        downloader = FTPDownloader(
-            host=plc_data['host'],
-            port=plc_data.get('port', 21),
-            username=plc_data['username'],
-            password=plc_data['password'],
-            machines=machines,
-            local_target_dir=target_dir,
-            file_extensions=g_settings.get("file_extensions", [".csv", ".txt"]),
-            separate_by_date=g_settings.get("separate_by_date", True),
-            plc_name=plc_data['name'],
-            date_filter=plc_data.get("date_filter"),
-            ftp_mode=plc_data.get("ftp_mode", "auto")
-        )
-
-        self.active_downloaders[plc_data['name']] = downloader
-        start_time = time.time()
-        is_running = [True]
-
-        def stop_this_download():
-            try:
-                if action_button and action_button.winfo_exists():
-                    action_button.configure(text="Stopping...", state="disabled")
-            except Exception:
-                pass
-            downloader.is_running = False
-            threading.Thread(target=downloader.cancel, daemon=True).start()
-
-        if action_button and action_button.winfo_exists():
-            action_button.configure(
-                text="🛑 Stop",
-                fg_color=("#D32F2F", "#C62828"),
-                hover_color=("#B71C1C", "#B71C1C"),
-                state="normal",
-                command=stop_this_download
-            )
-
-        def update_timer_ui():
-            if is_running[0]:
-                try:
-                    if timer_label and timer_label.winfo_exists():
-                        elapsed = int(time.time() - start_time)
-                        mins, secs = divmod(elapsed, 60)
-                        timer_label.configure(text=f"⏱ {mins:02d}:{secs:02d}", text_color="#3B8ED0")
-                        self.safe_after(500, update_timer_ui)
-                except Exception:
-                    pass
-
-        if timer_label and timer_label.winfo_exists():
-            timer_label.configure(text="⏱ 00:00", text_color="#3B8ED0")
-            self.safe_after(500, update_timer_ui)
-
-        def update_progress(current, total, remaining=0, eta_str="", speed_str=""):
-            prog = current / total if total > 0 else 0
-            pct = int(prog * 100)
+        """Delegate connection testing to DashboardController and update widgets."""
+        def on_status(status_text, color, msg_text=""):
             def _up():
                 try:
-                    if progress_bar and progress_bar.winfo_exists():
-                        progress_bar.set(prog)
-                    if counter_label and counter_label.winfo_exists():
-                        if remaining > 0 and eta_str:
-                            if speed_str:
-                                counter_label.configure(text=f"{current}/{total} ({pct}%) • ({eta_str}) • {speed_str}")
-                            else:
-                                counter_label.configure(text=f"{current}/{total} ({pct}%) • ({eta_str})")
-                        else:
-                            counter_label.configure(text=f"{current} / {total} files ({pct}%)")
+                    if status_label and status_label.winfo_exists():
+                        status_label.configure(text=status_text, text_color=color)
+                    if counter_label and counter_label.winfo_exists() and msg_text:
+                        counter_label.configure(text=msg_text)
                 except Exception:
                     pass
             self.safe_after(0, _up)
 
-        def log_cb(msg, level=None):
-            self.safe_after(0, lambda: logger.log(msg, level=level))
+        self.controller.test_single_connection(plc_data, on_status=on_status)
 
-        def run():
-            def _init_ui():
-                try:
-                    if status_label and status_label.winfo_exists():
-                        status_label.configure(text="● Connecting...", text_color="#FFA726")
-                    if counter_label and counter_label.winfo_exists():
-                        counter_label.configure(text="Connecting to FTP...")
-                    if progress_bar and progress_bar.winfo_exists():
-                        progress_bar.set(0)
-                except Exception:
-                    pass
-            self.safe_after(0, _init_ui)
-            logger.info(f"Starting download for {plc_data['name']}...")
+    def download_single(
+        self,
+        plc_data,
+        progress_bar,
+        status_label,
+        timer_label=None,
+        counter_label=None,
+        action_button=None,
+        on_finish_callback=None
+    ):
+        """Delegate single line download execution to DashboardController and wire UI feedbacks."""
+        target_dir = self.target_dir_var.get().strip()
+
+        def on_init(stop_callback):
             try:
-                downloader.download_files(progress_callback=update_progress, log_callback=log_cb)
-            finally:
-                self.active_downloaders.pop(plc_data['name'], None)
-                is_running[0] = False
-                elapsed = time.time() - start_time
-                mins, secs = divmod(int(elapsed), 60)
-                time_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.2f}s"
+                if action_button and action_button.winfo_exists():
+                    action_button.configure(
+                        text="🛑 Stop",
+                        fg_color=("#D32F2F", "#C62828"),
+                        hover_color=("#B71C1C", "#B71C1C"),
+                        state="normal",
+                        command=lambda: [action_button.configure(text="Stopping...", state="disabled"), stop_callback()]
+                    )
+                if status_label and status_label.winfo_exists():
+                    status_label.configure(text="● Connecting...", text_color="#FFA726")
+                if counter_label and counter_label.winfo_exists():
+                    counter_label.configure(text="Connecting to FTP...")
+                if progress_bar and progress_bar.winfo_exists():
+                    progress_bar.set(0)
+                if timer_label and timer_label.winfo_exists():
+                    timer_label.configure(text="⏱ 00:00", text_color="#3B8ED0")
+            except Exception:
+                pass
 
-                def _restore_ui():
-                    try:
-                        was_cancelled = not downloader.is_running
-                        if status_label and status_label.winfo_exists():
-                            if was_cancelled:
-                                status_label.configure(text="● Stopped", text_color="#FFA726")
-                            else:
-                                status_label.configure(text="● Finished", text_color="#00E676")
-                        if counter_label and counter_label.winfo_exists():
-                            counter_label.configure(text="Cancelled" if was_cancelled else f"Completed in {time_str}")
-                        if timer_label and timer_label.winfo_exists():
-                            timer_label.configure(text=f"⏱ {time_str}", text_color="#FFA726" if was_cancelled else "#00E676")
-                        if action_button and action_button.winfo_exists():
-                            dl_trigger = self.plc_download_by_name.get(plc_data['name'])
-                            action_button.configure(
-                                text="⬇ Download",
-                                fg_color=("#3B8ED0", "#1F6AA5"),
-                                hover_color=("#36719F", "#144870"),
-                                state="normal",
-                                command=dl_trigger
-                            )
-                    except Exception:
-                        pass
-                    if on_finish_callback:
-                        on_finish_callback()
+        def on_progress(prog, pct, c_text):
+            try:
+                if progress_bar and progress_bar.winfo_exists():
+                    progress_bar.set(prog)
+                if counter_label and counter_label.winfo_exists():
+                    counter_label.configure(text=c_text)
+            except Exception:
+                pass
 
-                self.safe_after(0, _restore_ui)
+        def on_timer(time_str, color):
+            try:
+                if timer_label and timer_label.winfo_exists():
+                    timer_label.configure(text=time_str, text_color=color)
+            except Exception:
+                pass
 
-        threading.Thread(target=run, daemon=True).start()
+        def on_finish_ui(was_cancelled, time_str):
+            try:
+                if status_label and status_label.winfo_exists():
+                    status_label.configure(
+                        text="● Stopped" if was_cancelled else "● Finished",
+                        text_color="#FFA726" if was_cancelled else "#00E676"
+                    )
+                if counter_label and counter_label.winfo_exists():
+                    counter_label.configure(text="Cancelled" if was_cancelled else f"Completed in {time_str}")
+                if timer_label and timer_label.winfo_exists():
+                    timer_label.configure(
+                        text=f"⏱ {time_str}",
+                        text_color="#FFA726" if was_cancelled else "#00E676"
+                    )
+                if action_button and action_button.winfo_exists():
+                    dl_trigger = self.controller.plc_download_by_name.get(plc_data.get("name"))
+                    action_button.configure(
+                        text="⬇ Download",
+                        fg_color=("#3B8ED0", "#1F6AA5"),
+                        hover_color=("#36719F", "#144870"),
+                        state="normal",
+                        command=dl_trigger
+                    )
+            except Exception:
+                pass
+
+        self.controller.download_single(
+            plc_data,
+            target_dir=target_dir,
+            on_init=on_init,
+            on_progress=on_progress,
+            on_timer=on_timer,
+            on_finish_ui=on_finish_ui,
+            on_finish_callback=on_finish_callback,
+            safe_after=self.safe_after
+        )
 
     def download_all(self, on_complete=None):
-        if self.has_active_downloads():
-            logger.warning("[Download All] Stopping all ongoing downloads...")
-            for dl in list(self.active_downloaders.values()):
-                dl.is_running = False
-            threading.Thread(target=self.stop_all_downloads, daemon=True).start()
-            if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
-                self.btn_download_all.configure(
-                    text="📥 Download All",
-                    fg_color=("#1976D2", "#0D47A1"),
-                    hover_color=("#1565C0", "#0A3880")
-                )
-            return
-
-        if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
-            self.btn_download_all.configure(
-                text="🛑 Stop All",
-                fg_color=("#D32F2F", "#C62828"),
-                hover_color=("#B71C1C", "#B71C1C")
-            )
-
-        def _on_all_done():
-            def _reset_btn():
-                try:
-                    if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
+        """Trigger or stop all line downloads via DashboardController."""
+        def on_btn_state(is_running):
+            try:
+                if hasattr(self, "btn_download_all") and self.btn_download_all.winfo_exists():
+                    if is_running:
                         self.btn_download_all.configure(
-                            text="📥 Download All",
+                            text="🛑 Stop All",
+                            fg_color=("#D32F2F", "#C62828"),
+                            hover_color=("#B71C1C", "#B71C1C")
+                        )
+                    else:
+                        self.btn_download_all.configure(
+                            text="⬇  Download All PLCs",
                             fg_color=("#1976D2", "#0D47A1"),
                             hover_color=("#1565C0", "#0A3880")
                         )
-                except Exception:
-                    pass
-            self.safe_after(0, _reset_btn)
-            if on_complete:
-                self.safe_after(0, on_complete)
+            except Exception:
+                pass
 
-        self.download_selected_lines(None, on_complete=_on_all_done)
+        self.controller.download_all(
+            on_complete=on_complete,
+            on_button_state=on_btn_state,
+            request_timer_reset_cb=self.request_timer_reset_cb,
+            safe_after=self.safe_after
+        )
 
     def download_selected_lines(self, target_line_names=None, on_complete=None):
-        if target_line_names is None:
-            triggers = list(self.plc_download_callbacks)
-        else:
-            triggers = [self.plc_download_by_name[name] for name in target_line_names if name in self.plc_download_by_name]
-
-        if not triggers:
-            if on_complete:
-                self.safe_after(0, on_complete)
-            return
-
-        remaining = [len(triggers)]
-        lock = threading.Lock()
-
-        def on_line_finished():
-            with lock:
-                remaining[0] -= 1
-                if remaining[0] <= 0:
-                    if on_complete:
-                        self.safe_after(0, on_complete)
-
-        for trigger in triggers:
-            trigger(on_finish=on_line_finished)
-
-        if self.request_timer_reset_cb and not on_complete:
-            self.request_timer_reset_cb()
+        """Trigger download for specific lines via DashboardController."""
+        self.controller.download_selected_lines(
+            target_line_names=target_line_names,
+            on_complete=on_complete,
+            request_timer_reset_cb=self.request_timer_reset_cb,
+            safe_after=self.safe_after
+        )

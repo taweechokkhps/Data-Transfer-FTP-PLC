@@ -4,14 +4,16 @@ from ui.components.tooltip import ToolTip
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
 from ui.components.date_picker import DatePickerPopup
 from ui.components.modal_utils import setup_modal_dialog
-from ui.controllers.plc_manager_controller import PLCManagerController
 
 class PLCModalDialog(ctk.CTkToplevel):
     """Modal dialog for adding or editing a PLC configuration with multiple machines."""
     def __init__(self, parent, config_manager, edit_index=None, on_save_callback=None, controller=None):
         super().__init__(parent)
         self.config_manager = config_manager
-        self.controller = controller or PLCManagerController(config_manager)
+        if controller is None:
+            from ui.controllers.plc_manager_controller import PLCManagerController
+            controller = PLCManagerController(config_manager)
+        self.controller = controller
         self.edit_index = edit_index
         self.on_save_callback = on_save_callback
         self.is_edit = edit_index is not None
