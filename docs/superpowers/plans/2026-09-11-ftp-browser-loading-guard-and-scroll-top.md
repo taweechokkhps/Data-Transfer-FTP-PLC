@@ -26,7 +26,7 @@
 - Produces: `FTPBrowserDialog._reset_scroll_to_top() -> None`
 - Produces: `FTPBrowserDialog._set_nav_state(enabled: bool) -> None`
 
-- [ ] **Step 1: Write tests in `tests/test_ftp_browser_dialog.py`**
+- [x] **Step 1: Write tests in `tests/test_ftp_browser_dialog.py`**
 
 Test cases:
 - `test_dialog_loading_state_disables_select_button`: Verifies that while loading, `btn_select` is disabled and text is `"⏳ Loading..."`.
@@ -35,12 +35,12 @@ Test cases:
 - `test_dialog_select_current_blocked_while_loading`: Verifies calling `select_current()` while `is_loading` is True does NOT trigger `on_select_callback`.
 - `test_reset_scroll_to_top`: Verifies `_reset_scroll_to_top` calls `yview_moveto(0.0)`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m unittest tests.test_ftp_browser_dialog`
 Expected: FAIL (methods / attributes not implemented yet)
 
-- [ ] **Step 3: Implement Loading Guard & Auto-Scroll in `FTPBrowserDialog`**
+- [x] **Step 3: Implement Loading Guard & Auto-Scroll in `FTPBrowserDialog`**
 
 In `ui/components/ftp_browser_dialog.py`:
 - In `__init__`:
@@ -75,12 +75,12 @@ In `ui/components/ftp_browser_dialog.py`:
 - In `select_path` and `select_current`:
   - Guard check: `if self.is_loading: return`
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m unittest tests.test_ftp_browser_dialog`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```bash
 git add ui/components/ftp_browser_dialog.py tests/test_ftp_browser_dialog.py
@@ -91,11 +91,11 @@ git commit -m "feat(ui): add loading guard and auto-scroll top to FTP browser di
 
 ### Task 2: Full Regression & Integration Verification
 
-- [ ] **Step 1: Run complete test suite**
+- [x] **Step 1: Run complete test suite**
 
 Run: `python -m unittest discover -s tests`
 Expected: ALL PASS (all 47+ tests)
 
-- [ ] **Step 2: Verify git status and diff**
+- [x] **Step 2: Verify git status and diff**
 
 Ensure clean working directory.
