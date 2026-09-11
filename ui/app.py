@@ -94,7 +94,7 @@ class App(ctk.CTk):
         self.update_cooldown_ui()
 
         # Version
-        self.version_label = ctk.CTkLabel(self, text="v1.2.1", text_color="gray", font=ctk.CTkFont(size=12))
+        self.version_label = ctk.CTkLabel(self, text="v1.3.0", text_color="gray", font=ctk.CTkFont(size=12))
         self.version_label.place(relx=1.0, rely=1.0, anchor="se", x=-20, y=-10)
         self.version_label.lift()
 
