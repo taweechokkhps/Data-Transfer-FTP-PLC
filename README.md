@@ -58,12 +58,19 @@
 - **Username / Password:** รหัสผ่าน FTP ของ PLC
 - **FTP Mode:** เลือก `Auto`, `Passive` หรือ `Active` (ค่าเริ่มต้นแนะนำ `Auto`)
 - **Machines:** กำหนดโฟลเดอร์ Remote Directory ของแต่ละเครื่องจักร เช่น `/MEMCARD/LOG/` พร้อมปุ่ม **📁 Browse FTP...** สำหรับสำรวจโฟลเดอร์จากเครื่องจริงโดยตรง
+  - มีระบบ **Loading Guard** ล็อคปุ่มยืนยันชั่วคราว (`⏳ Loading...`) ขณะกำลังดึงข้อมูลจาก PLC ป้องกันการส่งค่าโฟลเดอร์ว่าง
+  - มีระบบ **Auto-Scroll to Top** รีเซ็ตตำแหน่ง Scrollbar กลับไปที่ด้านบนสุดเสมอเมื่อเข้าโฟลเดอร์ใหม่
+- **ระบบป้องกัน IP และชื่อซ้ำ (Duplicate Prevention):**
+  - โปรแกรมจะตรวจสอบและปฏิเสธทันทีหากมีการกรอก IP Address (`host:port`) หรือชื่อ Line ซ้ำกับตู้เดิม เพื่อป้องกันปัญหาการแย่ง Socket หรือข้อมูลทับซ้อนกัน
 - กดปุ่ม **🔌 Test Connection** เพื่อทดสอบว่าเชื่อมต่อและล็อกอินผ่านก่อนบันทึก
 
 ### 3. การดึงไฟล์ (Overview / Dashboard)
 ไปที่เมนู **Overview**
 - ดูภาพรวมสถานะของทุก PLC ในสายการผลิต
 - **เลือกช่วงวันที่:** คลิกที่ป้ายวันที่ (เช่น `📅 All Files` หรือ `📅 Range`) เพื่อกำหนดช่วงวันที่ต้องการดึงข้อมูล
+- **ระบบจัดคิวแยกตาม Host IP (Smart Concurrency):**
+  - **ต่าง IP (คนละเครื่อง):** ดาวน์โหลดขนานพร้อมกันทันที (Parallel) เต็มสปีด
+  - **IP เดียวกัน:** จัดเข้าคิวรออัตโนมัติ (Sequential) โดยการ์ดถัดไปจะแสดงสถานะ `● In Queue` พร้อมข้อความระบุว่ากำลังรอตู้ใดว่างอยู่ ป้องกัน Socket ชนกันบนบอร์ด PLC
 - **เริ่มดาวน์โหลด:**
   - กดปุ่ม **⬇ Download** ที่เครื่องที่ต้องการดึงเฉพาะเครื่องนั้น
   - หรือกดปุ่ม **📥 Download All** ที่แถบด้านบน เพื่อสั่งดึงไฟล์จากทุก PLC พร้อมกัน
@@ -73,7 +80,7 @@
     150/430 (35%) • (~3 Min) • 320 KB/s
     ```
   - นาฬิกาจับเวลา (`⏱ 00:25`) จะนับเวลาที่ใช้จริง
-  - หากต้องการหยุดกลางคัน สามารถกดปุ่ม **🛑 Stop** เพื่อยกเลิกอย่างปลอดภัยได้ทันที
+  - หากต้องการหยุดกลางคัน สามารถกดปุ่ม **🛑 Stop** หรือ **Stop All** เพื่อยกเลิกอย่างปลอดภัยได้ทันที (รวมถึงตู้ที่กำลังรอคิวอยู่ด้วย)
 - **Log Console:** ตรวจสอบข้อความการทำงานแบบแยกสี (เขียว=สำเร็จ, ส้ม=คำเตือน, แดง=ข้อผิดพลาด)
 
 ---
@@ -82,27 +89,47 @@
 
 ### โครงสร้างโปรเจกต์ (Project Structure)
 ```text
-├── main.py                     # จุดเริ่มต้นโปรแกรม (Entry point)
-├── config.json                 # การตั้งค่า PLC และพารามิเตอร์ระบบ
-├── build_nuitka.bat            # สคริปต์คอมไพล์โปรแกรมเป็น Standalone .exe ด้วย Nuitka
+├── main.py                         # จุดเริ่มต้นโปรแกรม (Entry point)
+├── config.json                     # การตั้งค่า PLC และพารามิเตอร์ระบบ
+├── build_nuitka.bat                # สคริปต์คอมไพล์โปรแกรมเป็น Standalone .exe ด้วย Nuitka
 │
-├── core/                       # เลเยอร์ Business Logic & Background Services
-│   ├── path_utils.py           # ระบบจัดการ Path, ชื่อไฟล์, วันที่ และโฟลเดอร์
-│   ├── ftp_service.py          # FTP Engine, ETA Calculator, Speed Estimator, Concurrency Pool
-│   ├── converter_service.py    # ตัวแปลงไฟล์ TXT เป็น CSV อัตโนมัติ
-│   ├── fins_service.py         # โปรโตคอล Omron FINS UDP (Port 9600) ตรวจสอบโหมดเครื่องจักร
-│   ├── config_service.py       # จัดการโหลด/บันทึกการตั้งค่า (Thread-safe ConfigManager)
-│   └── logger.py               # ระบบบันทึก Log แบบรวมศูนย์ (UI Console + logs/app.log)
+├── core/                           # เลเยอร์ Business Logic & Background Services
+│   ├── path_utils.py               # ระบบจัดการ Path, ชื่อไฟล์, วันที่ และโฟลเดอร์
+│   ├── ftp_service.py              # FTP Engine, ETA Calculator, Speed Estimator, Concurrency Pool
+│   ├── converter_service.py        # ตัวแปลงไฟล์ TXT เป็น CSV อัตโนมัติ
+│   ├── fins_service.py             # โปรโตคอล Omron FINS UDP (Port 9600) ตรวจสอบโหมดเครื่องจักร
+│   ├── config_service.py           # จัดการโหลด/บันทึกการตั้งค่า (Thread-safe ConfigManager)
+│   └── logger.py                   # ระบบบันทึก Log แบบรวมศูนย์ (UI Console + logs/app.log)
 │
-├── ui/                         # เลเยอร์หน้าต่างและการแสดงผล (CustomTkinter)
-│   ├── app.py                  # หน้าต่างหลัก เมนูนำทาง และ Version Badge
-│   ├── components/             # วิดเจ็ตย่อย (Tooltip, LogConsole, FTPBrowserDialog, QuickDateFilter)
-│   └── views/                  # มุมมองหลัก (DashboardView, PLCManagerView, SettingsView)
+├── ui/                             # เลเยอร์ส่วนติดต่อผู้ใช้ (CustomTkinter - MVC Architecture)
+│   ├── app.py                      # หน้าต่างหลัก เมนูนำทาง และ Version Badge
+│   ├── controllers/                # Controller Layer: Business Logic & Concurrency Coordination
+│   │   ├── dashboard_controller.py   # ควบคุมคิวดาวน์โหลด Per-Host Lock, เธรดเบื้องหลัง, ทดสอบการเชื่อมต่อ
+│   │   ├── plc_manager_controller.py # จัดการ CRUD ตู้ PLC, Form Validation, ป้องกัน IP & ชื่อซ้ำ
+│   │   └── settings_controller.py    # จัดการตรวจสอบและบันทึกการตั้งค่าระบบ, เลือกโฟลเดอร์ปลายทาง
+│   ├── views/                      # View Layer: Pure Presentation & UI Layouts
+│   │   ├── dashboard_view.py       # หน้าจอหลัก Overview แสดงการ์ดและการตอบสนองของแต่ละ Line
+│   │   ├── plc_manager_view.py     # หน้าจอแสดงรายการและการ์ดของตู้ PLC
+│   │   └── settings_view.py        # หน้าจอฟอร์มการตั้งค่าระบบ
+│   └── components/                 # Reusable UI & Modal Components
+│       ├── plc_modal_dialog.py     # โมดอลฟอร์มสำหรับเพิ่ม/แก้ไข Line PLC
+│       ├── ftp_browser_dialog.py   # โมดอลสำรวจโฟลเดอร์บน PLC พร้อม Loading Guard & Auto-Scroll to Top
+│       ├── quick_date_filter_dialog.py # โมดอลเลือกช่วงวันที่ดาวน์โหลดแบบด่วน
+│       ├── date_picker.py          # วิดเจ็ตปฏิทินแบบกำหนดเอง
+│       ├── log_console.py          # คอนโซลแสดง Log แบบ Real-time พร้อมแถบกรองสี
+│       ├── modal_utils.py          # เครื่องมือคำนวณตำแหน่งและจัดการหน้าต่างโมดอล
+│       └── tooltip.py              # ป๊อปอัปแสดงคำแนะนำเมื่อวางเมาส์เหนือปุ่ม
 │
-├── tests/                      # ชุดทดสอบ Unit Tests
-│   ├── test_ftp_service.py     # ทดสอบการเชื่อมต่อ, ETA, Speed, Parallel Worker Pool
-│   ├── test_converter_service.py # ทดสอบการแปลง CSV
-│   └── ...
+├── tests/                          # ชุดทดสอบ Unit & Regression Tests (52 Tests - 100% Pass)
+│   ├── test_controllers.py         # ทดสอบ Controller ทุกตัว (Per-Host Queue, Duplicate IP/Name, CRUD)
+│   ├── test_ftp_browser_dialog.py  # ทดสอบ Loading Guard, Control State, Auto-Scroll Top
+│   ├── test_ftp_service.py         # ทดสอบการเชื่อมต่อ, ETA, Speed, Parallel Worker Pool
+│   ├── test_ftp_logging.py         # ทดสอบระบบ Logging และ Debug Level
+│   ├── test_converter_service.py   # ทดสอบการแปลง TXT เป็น CSV
+│   ├── test_fins_service.py        # ทดสอบโปรโตคอล Omron FINS UDP
+│   ├── test_config_and_logger.py   # ทดสอบ ConfigManager และ App Logger
+│   ├── test_date_picker.py         # ทดสอบระบบปฏิทินและ Date Parsing
+│   └── test_path_utils.py          # ทดสอบการตัดแต่ง Path และจัดโครงสร้างโฟลเดอร์
 ```
 
 ### การรันโปรแกรมในโหมดพัฒนา
@@ -113,7 +140,7 @@ pip install customtkinter imageio
 # รันโปรแกรม
 python main.py
 
-# รันชุดทดสอบ (Unit Tests)
+# รันชุดทดสอบทั้งหมด (52 Unit Tests)
 python -m unittest discover -s tests
 ```
 
