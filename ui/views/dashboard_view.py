@@ -9,7 +9,7 @@ from core.ftp_service import test_connection, FTPDownloader
 from core.logger import logger
 from ui.components.tooltip import ToolTip
 from ui.components.log_console import LogConsole
-from ui.components.date_picker import QuickDateFilterDialog
+from ui.components.quick_date_filter_dialog import QuickDateFilterDialog
 
 class DashboardView(ctk.CTkFrame):
     def __init__(self, master, config_manager, target_dir_var=None, request_timer_reset_cb=None, **kwargs):
