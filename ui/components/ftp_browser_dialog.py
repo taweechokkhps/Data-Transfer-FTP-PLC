@@ -27,6 +27,8 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         self.ftp_mode = ftp_mode
         self.current_dir = sanitize_remote_path(initial_dir) or "/"
         self.on_select_callback = on_select_callback
+        self.is_loading = False
+        self.btn_select = None
 
         self.title(f"📁 Remote PLC Browser — {self.host}:{self.port}")
         setup_modal_dialog(self, parent, target_width=720, target_height=600, resizable=True, min_width=620, min_height=480)
@@ -35,22 +37,22 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         nav_frame = ctk.CTkFrame(self, fg_color="transparent")
         nav_frame.pack(fill="x", padx=16, pady=(14, 4))
 
-        btn_up = ctk.CTkButton(nav_frame, text="⬆ Up", width=55, height=32, font=ctk.CTkFont(weight="bold"), command=self.go_up)
-        btn_up.pack(side="left", padx=(0, 4))
+        self.btn_up = ctk.CTkButton(nav_frame, text="⬆ Up", width=55, height=32, font=ctk.CTkFont(weight="bold"), command=self.go_up)
+        self.btn_up.pack(side="left", padx=(0, 4))
 
-        btn_root = ctk.CTkButton(nav_frame, text="🏠 Root", width=60, height=32, font=ctk.CTkFont(weight="bold"), command=self.go_root)
-        btn_root.pack(side="left", padx=(0, 6))
+        self.btn_root = ctk.CTkButton(nav_frame, text="🏠 Root", width=60, height=32, font=ctk.CTkFont(weight="bold"), command=self.go_root)
+        self.btn_root.pack(side="left", padx=(0, 6))
 
         self.path_entry = ctk.CTkEntry(nav_frame, height=32, font=ctk.CTkFont(size=12))
         self.path_entry.insert(0, self.current_dir)
         self.path_entry.pack(side="left", fill="x", expand=True, padx=4)
         self.path_entry.bind("<Return>", lambda e: self.go_manual())
 
-        btn_go = ctk.CTkButton(nav_frame, text="Go", width=45, height=32, font=ctk.CTkFont(weight="bold"), command=self.go_manual)
-        btn_go.pack(side="left", padx=(4, 4))
+        self.btn_go = ctk.CTkButton(nav_frame, text="Go", width=45, height=32, font=ctk.CTkFont(weight="bold"), command=self.go_manual)
+        self.btn_go.pack(side="left", padx=(4, 4))
 
-        btn_refresh = ctk.CTkButton(nav_frame, text="🔄", width=36, height=32, font=ctk.CTkFont(size=13), command=lambda: self.load_directory(self.current_dir))
-        btn_refresh.pack(side="left")
+        self.btn_refresh = ctk.CTkButton(nav_frame, text="🔄", width=36, height=32, font=ctk.CTkFont(size=13), command=lambda: self.load_directory(self.current_dir))
+        self.btn_refresh.pack(side="left")
 
         # 2. Connection & Status info bar
         status_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -150,12 +152,43 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         # Load initial target directory
         self.load_directory(self.current_dir)
 
+    def _reset_scroll_to_top(self):
+        """Reset the scrollable content frame's vertical scroll position to top (0.0)."""
+        try:
+            if hasattr(self, "content_frame") and hasattr(self.content_frame, "_parent_canvas"):
+                self.content_frame._parent_canvas.yview_moveto(0.0)
+        except Exception:
+            pass
+
+    def _set_controls_loading_state(self, is_loading: bool):
+        """Manage enable/disable state of navigation and selection controls during loading."""
+        self.is_loading = is_loading
+        try:
+            nav_state = "disabled" if is_loading else "normal"
+            for attr in ["btn_up", "btn_root", "btn_go", "btn_refresh"]:
+                if hasattr(self, attr):
+                    btn = getattr(self, attr)
+                    if btn and hasattr(btn, "winfo_exists") and btn.winfo_exists():
+                        btn.configure(state=nav_state)
+            if hasattr(self, "path_entry") and self.path_entry and self.path_entry.winfo_exists():
+                self.path_entry.configure(state=nav_state)
+            if hasattr(self, "btn_select") and self.btn_select and self.btn_select.winfo_exists():
+                if is_loading:
+                    self.btn_select.configure(state="disabled", text="⏳ Loading...")
+                else:
+                    self.btn_select.configure(state="normal", text="✓ Select This Directory")
+        except Exception:
+            pass
+
     def load_directory(self, target_dir):
         try:
             if not self.winfo_exists():
                 return
         except Exception:
             return
+
+        self._set_controls_loading_state(True)
+        self._reset_scroll_to_top()
 
         try:
             self.status_label.configure(text=f"Loading...", text_color="#FFA726")
@@ -201,6 +234,9 @@ class FTPBrowserDialog(ctk.CTkToplevel):
                 return
         except Exception:
             return
+
+        self._set_controls_loading_state(False)
+        self._reset_scroll_to_top()
 
         try:
             self.current_dir = data.get("current_dir", "/")
@@ -309,12 +345,23 @@ class FTPBrowserDialog(ctk.CTkToplevel):
         except Exception:
             pass
 
+        self._reset_scroll_to_top()
+        try:
+            self.after(20, self._reset_scroll_to_top)
+        except Exception:
+            pass
+
     def _on_load_fail(self, err_msg, failed_dir=None):
         try:
             if not self.winfo_exists():
                 return
         except Exception:
             return
+
+        self._set_controls_loading_state(False)
+        # Keep select button disabled on failure because directory could not be read
+        if hasattr(self, "btn_select") and self.btn_select and self.btn_select.winfo_exists():
+            self.btn_select.configure(state="disabled", text="✓ Select This Directory")
 
         try:
             if hasattr(self, "status_label") and self.status_label.winfo_exists():
@@ -363,20 +410,26 @@ class FTPBrowserDialog(ctk.CTkToplevel):
             pass
 
     def navigate_into(self, folder_name):
+        if self.is_loading:
+            return
         new_path = sanitize_remote_path(f"{self.current_dir.rstrip('/')}/{folder_name}")
         self.load_directory(new_path)
 
     def go_up(self):
-        if self.current_dir in ["/", ""]:
+        if self.is_loading or self.current_dir in ["/", ""]:
             return
         parts = self.current_dir.rstrip("/").split("/")[:-1]
         parent = sanitize_remote_path("/".join(parts)) if parts else "/"
         self.load_directory(parent)
 
     def go_root(self):
+        if self.is_loading:
+            return
         self.load_directory("/")
 
     def go_manual(self):
+        if self.is_loading:
+            return
         entered = sanitize_remote_path(self.path_entry.get().strip())
         self.load_directory(entered)
 
@@ -397,11 +450,15 @@ class FTPBrowserDialog(ctk.CTkToplevel):
             pass
 
     def select_path(self, path):
+        if self.is_loading:
+            return
         if self.on_select_callback:
             self.on_select_callback(path)
         self.destroy()
 
     def select_current(self):
+        if self.is_loading:
+            return
         self.select_path(self.current_dir)
 
     def destroy(self):
