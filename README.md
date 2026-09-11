@@ -1,14 +1,32 @@
-# Keyence PLC Data Transfer FTP - คู่มือการใช้งาน (v1.1.0)
+# PLC Data Transfer FTP - คู่มือการใช้งาน (v1.3.0)
 
-โปรแกรมนี้ใช้สำหรับดึงไฟล์ข้อมูลจาก Keyence PLC ผ่านโปรโตคอล FTP โดยมี UI ที่สวยงาม ทันสมัย รองรับการเลือกโฟลเดอร์บน FTP ผ่านระบบ Browse และสามารถตั้งค่าการดึงไฟล์แบบแยกโฟลเดอร์ตามวันที่ได้อัตโนมัติ
+โปรแกรมสำหรับเชื่อมต่อและดึงไฟล์ข้อมูลจากเครื่องจักรและ PLC (รองรับทั้ง **Keyence** และ **Omron**) ผ่านโปรโตคอล FTP พร้อมระบบแปลงไฟล์เป็น CSV อัตโนมัติ, ระบบความปลอดภัย FINS Interlock, คำนวณเวลาที่เหลือจริง (ETA) และวัดความเร็วการโอนถ่ายข้อมูลแบบ Real-time โดยมี UI ที่สวยงาม ทันสมัย ใช้งานง่ายในระดับโรงงานอุตสาหกรรม
 
-## 🚀 คุณสมบัติเด่น (Key Features - v1.1.0)
-- **Modular Clean Architecture:** โครงสร้างโค้ดแบบแยกเลเยอร์ (`core/` และ `ui/`) อ่านง่าย บำรุงรักษาสะดวก
-- **📁 Remote FTP Folder Browser:** ปุ่มสำรวจโฟลเดอร์บนเครื่อง PLC โดยตรงในหน้า Add/Edit PLC ไม่ต้องเดาหรือพิมพ์ Path เอง
-- **🛡️ Auto Path Sanitizer:** ระบบทำความสะอาด Path อัตโนมัติ (แปลง Backslash `\` เป็น `/` และตัด Windows Drive Letter `C:` ออกอัตโนมัติ ป้องกัน Error 550)
-- **⚡ Incremental File Transfer:** ตรวจสอบขนาดไฟล์ก่อนดาวน์โหลด หากมีไฟล์เดิมขนาดตรงกันอยู่แล้วจะข้ามอัตโนมัติ ประหยัดเวลาและ Bandwidth
-- **📝 Persistent Logging:** บันทึกประวัติการทำงานและข้อผิดพลาดลงไฟล์ `logs/app.log` หมุนเวียนอัตโนมัติ
-- **⏱️ Auto Pull Scheduler:** ตั้งรอบเวลาดาวน์โหลดอัตโนมัติ พร้อมตัวนับถอยหลัง Cooldown บนหน้า Dashboard
+---
+
+## 🚀 คุณสมบัติเด่น (Key Features - v1.3.0)
+
+- **⚡ Real-time Speed & Dynamic ETA Display:**
+  - คำนวณเวลาที่เหลือโดยประมาณ (ETA) แบบแม่นยำจากระยะเวลาการดึงข้อมูลจริงผ่านเครือข่าย รองรับหน่วยชั่วโมง (เช่น `~1.24 Hour`), นาที (`~3 Min`) และวินาที (`~30 Sec`)
+  - แสดงความเร็วในการดาวน์โหลดจริงแบบสดๆ (`KB/s`, `MB/s`) เช่น `150/430 (35%) • (~3 Min) • 320 KB/s`
+- **🛡️ Omron FINS Safety Interlock (Port 9600 UDP):**
+  - ตรวจสอบสถานะการทำงานของเครื่องจักร (บิตโหมด AUTO / MANUAL) ก่อนดาวน์โหลดไฟล์วันปัจจุบัน เพื่อป้องกันการดึงไฟล์ขณะเครื่องจักรกำลังบันทึกข้อมูล
+- **📊 Auto TXT-to-CSV Conversion:**
+  - แปลงไฟล์ข้อมูลดิบ (`.txt`) เป็นไฟล์ `.csv` ให้อัตโนมัติทันทีที่ดาวน์โหลดเสร็จ พร้อมแยกเก็บเป็นสัดส่วนในโฟลเดอร์ `csv/` และ `plaintext/`
+- **🏭 Multi-Machine Support ต่อ 1 PLC:**
+  - รองรับการตั้งค่าเครื่องจักรย่อยหลายเครื่อง (เช่น MC1, MC2, MC3) ภายใต้การ์ดควบคุมหรือ PLC ตัวเดียวกัน
+- **📅 Smart Date Range Filtering:**
+  - เลือกช่วงวันที่ที่ต้องการดึงข้อมูลย้อนหลังได้จากหน้า Dashboard ผ่านปุ่ม Calendar Badge โดยไม่ต้องไปแก้ใน Settings
+- **⚡ Smart Duplicate File Skip:**
+  - ตรวจสอบไฟล์ในอดีตที่ปิดรอบไปแล้ว หากมีไฟล์ในเครื่องคอมพิวเตอร์ครบถ้วนแล้วจะข้ามทันที ประหยัดเวลาและลดโหลดของเครื่องจักร
+  - ไฟล์ของวันปัจจุบันจะดึงมาอัปเดตให้อัตโนมัติเพื่อให้ได้ข้อมูลกะล่าสุดเสมอ
+- **🌐 Dual FTP Mode & Thai Encoding Support:**
+  - รองรับทั้งโหมด Passive (PASV) และ Active (PORT) พร้อมระบบสลับโหมดอัตโนมัติเมื่อ PLC ตอบกลับรหัส 502
+  - รองรับรหัสภาษาไทย CP874, TIS-620 และ UTF-8 ไม่ทำให้ชื่อไฟล์ภาษาไทยเพี้ยน
+- **🛑 Emergency Socket Cleanup (Industrial Grade):**
+  - ระบบตัดการเชื่อมต่อและปิด Socket กับ PLC ทันทีเมื่อกดยกเลิกหรือปิดโปรแกรมกะทันหัน ป้องกันพอร์ตสื่อสารของการ์ด PLC ค้าง
+- **⏱️ Auto Pull Scheduler:**
+  - ตั้งรอบเวลาดาวน์โหลดอัตโนมัติ พร้อมตัวนับถอยหลัง Cooldown บนหน้า Dashboard
 
 ---
 
@@ -16,26 +34,37 @@
 
 ### 1. การตั้งค่าเบื้องต้น (Settings)
 ไปที่เมนู **Settings** (แถบเมนูด้านซ้าย)
-- **Target Save Directory:** เลือกโฟลเดอร์ปลายทางในคอมพิวเตอร์ของคุณที่จะใช้เก็บไฟล์ที่ดึงมาจาก PLC
-- **File Extensions:** กำหนดนามสกุลไฟล์ที่ต้องการดึง เช่น `.csv, .txt` (คั่นด้วยลูกน้ำ)
-- **Separate by Date:** หากเปิดใช้งาน โปรแกรมจะสร้างโฟลเดอร์เป็นวันที่ (เช่น `07-09-2026`) ไว้ข้างใน Target Directory อัตโนมัติ
-- **Auto Pull Interval (Minutes):** ตั้งเวลารอบการดึงอัตโนมัติเป็นนาที (ใส่ `0` หากต้องการปิด)
+- **Target Save Directory:** เลือกโฟลเดอร์ปลายทางในคอมพิวเตอร์ที่จะใช้บันทึกไฟล์
+- **File Extensions:** กำหนดนามสกุลไฟล์ที่ต้องการดึง เช่น `.csv, .txt` (คั่นด้วยจุลภาค)
+- **Separate by Date:** เปิดใช้งานหากต้องการให้โปรแกรมจัดหมวดหมู่แยกโฟลเดอร์ตามวันที่ของไฟล์
+- **Auto Pull Interval (Minutes):** ตั้งเวลารอบการดึงข้อมูลอัตโนมัติ (ใส่ `0` หากต้องการปิดและใช้เฉพาะการกดมือ)
 
-### 2. การเพิ่ม/แก้ไข PLC (PLC Manager)
+### 2. การจัดการเครื่อง PLC (PLC Manager)
 ไปที่เมนู **PLC Manager**
 - กดปุ่ม **Add New PLC** 
-- **PLC Name:** ชื่อเรียกเครื่อง PLC เช่น "Line 1"
+- **PLC Name:** ชื่อระบุเครื่อง เช่น "Line 1 - Robot Cell"
 - **IP Address (Host):** ไอพีของ PLC เช่น `192.168.0.10`
 - **Port:** พอร์ต FTP (ปกติคือ `21`)
-- **Username / Password:** รหัสผ่าน FTP ของ PLC (ปกติมักใช้ `ftp` และรหัสผ่านว่างเปล่า)
-- **Remote Directory:** สามารถกดปุ่ม **📁 Browse FTP...** เพื่อเปิดหน้าต่างเลือกโฟลเดอร์บน PLC ได้โดยตรง หรือใส่ Path เอง เช่น `/Documents/Projects/...` หรือ `/0_CARD/log0/`
-- สามารถกดปุ่ม **🔌 Test Connection** เพื่อทดสอบเชื่อมต่อก่อนกดบันทึกได้ทันที
+- **Username / Password:** รหัสผ่าน FTP ของ PLC
+- **FTP Mode:** เลือก `Auto`, `Passive` หรือ `Active` (ค่าเริ่มต้นแนะนำ `Auto`)
+- **Machines:** กำหนดโฟลเดอร์ Remote Directory ของแต่ละเครื่องจักร เช่น `/MEMCARD/LOG/` พร้อมปุ่ม **📁 Browse FTP...** สำหรับสำรวจโฟลเดอร์จากเครื่องจริงโดยตรง
+- กดปุ่ม **🔌 Test Connection** เพื่อทดสอบว่าเชื่อมต่อและล็อกอินผ่านก่อนบันทึก
 
 ### 3. การดึงไฟล์ (Overview / Dashboard)
 ไปที่เมนู **Overview**
-- คุณจะเห็นรายชื่อ PLC ทั้งหมดที่ตั้งค่าไว้
-- กดปุ่ม **Download** ที่ PLC แต่ละเครื่อง เพื่อเริ่มดึงไฟล์ทันที หรือกดปุ่ม **Download All** เพื่อดึงทุกเครื่อง
-- แถบ Progress จะแสดงสถานะการดึงไฟล์ พร้อม Log Console ด้านล่างแบบแยกสี และมีปุ่ม **Clear** สำหรับล้างหน้าต่าง Log
+- ดูภาพรวมสถานะของทุก PLC ในสายการผลิต
+- **เลือกช่วงวันที่:** คลิกที่ป้ายวันที่ (เช่น `📅 All Files` หรือ `📅 Range`) เพื่อกำหนดช่วงวันที่ต้องการดึงข้อมูล
+- **เริ่มดาวน์โหลด:**
+  - กดปุ่ม **⬇ Download** ที่เครื่องที่ต้องการดึงเฉพาะเครื่องนั้น
+  - หรือกดปุ่ม **📥 Download All** ที่แถบด้านบน เพื่อสั่งดึงไฟล์จากทุก PLC พร้อมกัน
+- **ขณะดาวน์โหลด:**
+  - แถบ Progress Bar จะแสดงความคืบหน้า จำนวนไฟล์ เวลาที่เหลือ (ETA) และสปีดความเร็ว เช่น:
+    ```text
+    150/430 (35%) • (~3 Min) • 320 KB/s
+    ```
+  - นาฬิกาจับเวลา (`⏱ 00:25`) จะนับเวลาที่ใช้จริง
+  - หากต้องการหยุดกลางคัน สามารถกดปุ่ม **🛑 Stop** เพื่อยกเลิกอย่างปลอดภัยได้ทันที
+- **Log Console:** ตรวจสอบข้อความการทำงานแบบแยกสี (เขียว=สำเร็จ, ส้ม=คำเตือน, แดง=ข้อผิดพลาด)
 
 ---
 
@@ -43,34 +72,44 @@
 
 ### โครงสร้างโปรเจกต์ (Project Structure)
 ```text
-├── main.py                     # Entry point (เรียก ui.app)
-├── config.json                 # การตั้งค่าระบบ
+├── main.py                     # จุดเริ่มต้นโปรแกรม (Entry point)
+├── config.json                 # การตั้งค่า PLC และพารามิเตอร์ระบบ
+├── build_nuitka.bat            # สคริปต์คอมไพล์โปรแกรมเป็น Standalone .exe ด้วย Nuitka
 │
-├── core/                       # เลเยอร์ Core Logic & Services
-│   ├── path_utils.py           # Path sanitization & local dir formatting
-│   ├── ftp_service.py          # FTP connection, folder exploration & downloader
-│   ├── config_service.py       # ConfigManager CRUD
-│   └── logger.py               # Central logger (UI callback + file log)
+├── core/                       # เลเยอร์ Business Logic & Background Services
+│   ├── path_utils.py           # ระบบจัดการ Path, ชื่อไฟล์, วันที่ และโฟลเดอร์
+│   ├── ftp_service.py          # FTP Engine, ETA Calculator, Speed Estimator, Concurrency Pool
+│   ├── converter_service.py    # ตัวแปลงไฟล์ TXT เป็น CSV อัตโนมัติ
+│   ├── fins_service.py         # โปรโตคอล Omron FINS UDP (Port 9600) ตรวจสอบโหมดเครื่องจักร
+│   ├── config_service.py       # จัดการโหลด/บันทึกการตั้งค่า (Thread-safe ConfigManager)
+│   └── logger.py               # ระบบบันทึก Log แบบรวมศูนย์ (UI Console + logs/app.log)
 │
-├── ui/                         # เลเยอร์ Graphical User Interface
-│   ├── app.py                  # หน้าต่างหลัก Navigation & Theme
-│   ├── components/             # Tooltip, LogConsole, FTPBrowserDialog
-│   └── views/                  # DashboardView, PLCManagerView, SettingsView
+├── ui/                         # เลเยอร์หน้าต่างและการแสดงผล (CustomTkinter)
+│   ├── app.py                  # หน้าต่างหลัก เมนูนำทาง และ Version Badge
+│   ├── components/             # วิดเจ็ตย่อย (Tooltip, LogConsole, FTPBrowserDialog, QuickDateFilter)
+│   └── views/                  # มุมมองหลัก (DashboardView, PLCManagerView, SettingsView)
 │
-├── gui.py                      # Compatibility shim
-├── ftp_client.py               # Compatibility shim
-└── config_manager.py           # Compatibility shim
+├── tests/                      # ชุดทดสอบ Unit Tests
+│   ├── test_ftp_service.py     # ทดสอบการเชื่อมต่อ, ETA, Speed, Parallel Worker Pool
+│   ├── test_converter_service.py # ทดสอบการแปลง CSV
+│   └── ...
 ```
 
 ### การรันโปรแกรมในโหมดพัฒนา
-```cmd
-# ติดตั้งไลบรารี
+```powershell
+# ติดตั้งไลบรารีที่จำเป็น
 pip install customtkinter imageio
 
 # รันโปรแกรม
 python main.py
+
+# รันชุดทดสอบ (Unit Tests)
+python -m unittest discover -s tests
 ```
 
-### การแพ็คโปรแกรมเป็น .exe ด้วย Nuitka
-สามารถดับเบิลคลิกไฟล์ `build.bat` หรือ `build_quick.bat` ได้ทันที  
-ผลลัพธ์จะได้ไฟล์ `FTP_Control.exe` ในโฟลเดอร์โปรเจกต์
+### การคอมไพล์เป็นไฟล์ .exe (Standalone)
+รันไฟล์สคริปต์ Nuitka:
+```cmd
+build_nuitka.bat
+```
+ผลลัพธ์จะได้ไฟล์ `FTP_Control.exe` ที่สามารถนำไปใช้งานบนคอมพิวเตอร์เครื่องอื่นได้ทันทีโดยไม่ต้องติดตั้ง Python
