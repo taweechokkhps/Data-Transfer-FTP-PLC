@@ -1,17 +1,17 @@
 import customtkinter as ctk
 import threading
-from core.ftp_service import test_connection
-from core.path_utils import sanitize_remote_path
 from ui.components.tooltip import ToolTip
 from ui.components.ftp_browser_dialog import FTPBrowserDialog
-from ui.components.date_picker import DatePickerPopup, validate_date_range
+from ui.components.date_picker import DatePickerPopup
 from ui.components.modal_utils import setup_modal_dialog
+from ui.controllers.plc_manager_controller import PLCManagerController
 
 class PLCModalDialog(ctk.CTkToplevel):
     """Modal dialog for adding or editing a PLC configuration with multiple machines."""
-    def __init__(self, parent, config_manager, edit_index=None, on_save_callback=None):
+    def __init__(self, parent, config_manager, edit_index=None, on_save_callback=None, controller=None):
         super().__init__(parent)
         self.config_manager = config_manager
+        self.controller = controller or PLCManagerController(config_manager)
         self.edit_index = edit_index
         self.on_save_callback = on_save_callback
         self.is_edit = edit_index is not None
@@ -84,7 +84,7 @@ class PLCModalDialog(ctk.CTkToplevel):
             m = mode_val_map.get(ftp_mode_var.get(), "auto")
             test_status_lbl.configure(text="Testing connection...", text_color="gray")
             def run():
-                ok, msg = test_connection(h, p, u, pw, ftp_mode=m)
+                ok, msg = self.controller.test_connection(h, p, u, pw, ftp_mode=m)
                 try:
                     if not self.winfo_exists():
                         return
@@ -260,49 +260,35 @@ class PLCModalDialog(ctk.CTkToplevel):
         bottom_bar.pack(fill="x", padx=20, pady=(5, 15))
 
         def save():
-            line_name = name_entry.get().strip()
-            host = host_entry.get().strip()
-            if not line_name or not host:
-                test_status_lbl.configure(text="Please fill Line Name and IP Address.", text_color="#FF5252")
-                return
-
             collected_machines = []
             for r in machine_rows:
                 m_n = r["name_entry"].get().strip()
                 m_d = r["dir_entry"].get().strip()
                 if m_n and m_d:
-                    collected_machines.append({"name": m_n, "remote_dir": sanitize_remote_path(m_d)})
-
-            if not collected_machines:
-                collected_machines.append({"name": "MC1", "remote_dir": "/"})
-
-            df_mode = filter_mode_var.get()
-            s_date = start_date_ent.get().strip()
-            e_date = end_date_ent.get().strip()
-            if df_mode == "range":
-                ok, err, _, _ = validate_date_range(s_date, e_date)
-                if not ok:
-                    test_status_lbl.configure(text=err, text_color="#FF5252")
-                    return
+                    collected_machines.append({"name": m_n, "remote_dir": m_d})
 
             new_data = {
-                "name": line_name,
-                "host": host,
-                "port": int(port_entry.get() if port_entry.get().isdigit() else 21),
+                "name": name_entry.get().strip(),
+                "host": host_entry.get().strip(),
+                "port": port_entry.get().strip(),
                 "username": user_entry.get().strip(),
                 "password": pass_entry.get().strip(),
                 "ftp_mode": mode_val_map.get(ftp_mode_var.get(), "auto"),
                 "machines": collected_machines,
                 "date_filter": {
-                    "mode": df_mode,
-                    "start_date": s_date,
-                    "end_date": e_date
+                    "mode": filter_mode_var.get(),
+                    "start_date": start_date_ent.get().strip(),
+                    "end_date": end_date_ent.get().strip()
                 }
             }
             if self.is_edit:
-                self.config_manager.update_plc(self.edit_index, new_data)
+                ok, msg = self.controller.update_plc(self.edit_index, new_data)
             else:
-                self.config_manager.add_plc(new_data)
+                ok, msg = self.controller.add_plc(new_data)
+
+            if not ok:
+                test_status_lbl.configure(text=msg, text_color="#FF5252")
+                return
 
             if self.on_save_callback:
                 self.on_save_callback()

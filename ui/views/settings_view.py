@@ -1,10 +1,11 @@
 import customtkinter as ctk
-from tkinter import filedialog
+from ui.controllers.settings_controller import SettingsController
 
 class SettingsView(ctk.CTkFrame):
-    def __init__(self, master, config_manager, target_dir_var=None, on_settings_changed=None, **kwargs):
+    def __init__(self, master, config_manager, target_dir_var=None, on_settings_changed=None, controller=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.config_manager = config_manager
+        self.controller = controller or SettingsController(self.config_manager)
         self.target_dir_var = target_dir_var
         self.on_settings_changed = on_settings_changed
         self.config = self.config_manager.get()
@@ -40,7 +41,7 @@ class SettingsView(ctk.CTkFrame):
             self.target_dir_var = ctk.StringVar(value=self.config["global_settings"].get("target_directory", ""))
         self.target_dir_entry = ctk.CTkEntry(dir_input_row, textvariable=self.target_dir_var, height=34, placeholder_text="e.g. C:/PLC_Logs or D:/Production_Data")
         self.target_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 12))
-        self.target_dir_entry.bind("<FocusOut>", lambda e: self.config_manager.update_global_settings({"target_directory": self.target_dir_var.get().strip()}))
+        self.target_dir_entry.bind("<FocusOut>", lambda e: self.save_settings(show_feedback=False))
         
         btn_browse = ctk.CTkButton(dir_input_row, text="Browse...", width=95, height=34, font=ctk.CTkFont(weight="bold"), command=self.browse_target_dir)
         btn_browse.pack(side="right")
@@ -281,10 +282,9 @@ class SettingsView(ctk.CTkFrame):
             del_b.pack(side="left", padx=(0, 6), pady=3)
 
     def add_custom_ext(self):
-        val = self.custom_ext_entry.get().strip().lower()
+        raw = self.custom_ext_entry.get()
+        val = self.controller.format_extension(raw)
         if val:
-            if not val.startswith("."):
-                val = "." + val
             if val not in self.std_ext_vars and val not in self.custom_ext_list:
                 self.custom_ext_list.append(val)
                 self.render_custom_chips()
@@ -301,10 +301,11 @@ class SettingsView(ctk.CTkFrame):
         return exts if exts else [".txt", ".csv"]
 
     def browse_target_dir(self):
-        dir_name = filedialog.askdirectory(title="Select Target Save Directory")
-        if dir_name:
-            self.target_dir_var.set(dir_name)
-            self.config_manager.update_global_settings({"target_directory": dir_name})
+        initial = self.target_dir_var.get() if self.target_dir_var else ""
+        chosen = self.controller.browse_target_dir(initial_dir=initial)
+        if chosen:
+            self.target_dir_var.set(chosen)
+            self.save_settings(show_feedback=False)
 
     def save_settings(self, show_feedback=True):
         exts = self.get_selected_extensions()
@@ -321,10 +322,13 @@ class SettingsView(ctk.CTkFrame):
             "auto_pull_interval_minutes": interval,
             "auto_pull_lines": selected_lines
         }
-        self.config_manager.update_global_settings(settings)
-        if self.on_settings_changed:
+        ok, msg = self.controller.save_settings(settings)
+        if ok and self.on_settings_changed:
             self.on_settings_changed()
             
         if show_feedback:
-            self.saved_feedback.configure(text="✓ บันทึกการตั้งค่าสำเร็จ! (Settings Saved)", text_color="#00E676")
+            if ok:
+                self.saved_feedback.configure(text="✓ บันทึกการตั้งค่าสำเร็จ! (Settings Saved)", text_color="#00E676")
+            else:
+                self.saved_feedback.configure(text=f"✗ {msg}", text_color="#FF5252")
             self.after(3000, lambda: self.saved_feedback.configure(text=""))

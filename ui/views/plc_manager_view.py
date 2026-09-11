@@ -2,11 +2,14 @@ import customtkinter as ctk
 from core.logger import logger
 from ui.components.tooltip import ToolTip
 from ui.components.plc_modal_dialog import PLCModalDialog
+from ui.components.modal_utils import setup_modal_dialog
+from ui.controllers.plc_manager_controller import PLCManagerController
 
 class PLCManagerView(ctk.CTkFrame):
-    def __init__(self, master, config_manager, on_plc_list_updated=None, **kwargs):
+    def __init__(self, master, config_manager, on_plc_list_updated=None, controller=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.config_manager = config_manager
+        self.controller = controller or PLCManagerController(self.config_manager)
         self.on_plc_list_updated = on_plc_list_updated
         
         self.grid_columnconfigure(0, weight=1)
@@ -54,7 +57,7 @@ class PLCManagerView(ctk.CTkFrame):
         for w in self.plc_list_frame.winfo_children():
             w.destroy()
 
-        plcs = self.config_manager.get().get("plcs", [])
+        plcs = self.controller.get_plcs()
         self.summary_badge.configure(text=f"จัดการข้อมูลสายการผลิตและตู้ PLC ({len(plcs)} Line(s) configured)")
 
         if not plcs:
@@ -197,7 +200,7 @@ class PLCManagerView(ctk.CTkFrame):
             df_lbl.pack(anchor="w", pady=(8, 0))
 
     def delete_plc(self, index):
-        plcs = self.config_manager.get().get("plcs", [])
+        plcs = self.controller.get_plcs()
         plc_name = plcs[index].get("name", f"PLC {index+1}") if index < len(plcs) else f"PLC {index+1}"
 
         confirm = ctk.CTkToplevel(self)
@@ -221,7 +224,7 @@ class PLCManagerView(ctk.CTkFrame):
 
         def do_delete():
             confirm.destroy()
-            self.config_manager.delete_plc(index)
+            self.controller.delete_plc(index)
             self.refresh_list()
             if self.on_plc_list_updated:
                 self.on_plc_list_updated()
@@ -243,7 +246,8 @@ class PLCManagerView(ctk.CTkFrame):
             self,
             config_manager=self.config_manager,
             edit_index=edit_index,
-            on_save_callback=self._on_dialog_saved
+            on_save_callback=self._on_dialog_saved,
+            controller=self.controller
         )
 
     def _on_dialog_saved(self):
