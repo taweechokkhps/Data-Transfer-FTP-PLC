@@ -339,6 +339,7 @@ class FTPDownloader:
         self.plc_name = plc_name
         self.ftp = None
         self.is_running = False
+        self.is_cancelled = False
 
     def connect(self, log_callback=None) -> tuple[bool, str]:
         debug_output = io.StringIO()
@@ -399,6 +400,7 @@ class FTPDownloader:
 
     def cancel(self, log_callback=None):
         """Cleanly and safely aborts active FTP transfer and terminates connection to Omron PLC."""
+        self.is_cancelled = True
         self.is_running = False
         _active_downloaders.discard(self)
         _emit_log(log_callback, f"[{self.plc_name}] 🛑 กำลังยกเลิกการดาวน์โหลด และปิดการเชื่อมต่อกับ PLC อย่างปลอดภัย...", "warning")

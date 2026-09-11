@@ -14,6 +14,7 @@ class DashboardController:
         self.config_manager = config_manager
         self.logger = app_logger or logger
         self.active_downloaders: Dict[str, FTPDownloader] = {}
+        self.active_cancel_events: Dict[str, threading.Event] = {}
         self.plc_download_callbacks: List[Callable] = []
         self.plc_download_by_name: Dict[str, Callable] = {}
         self._host_locks: Dict[str, threading.Lock] = {}
@@ -44,6 +45,8 @@ class DashboardController:
 
     def stop_all_downloads(self):
         """Cancel and stop all active downloads."""
+        for ev in list(self.active_cancel_events.values()):
+            ev.set()
         for name, dl in list(self.active_downloaders.items()):
             try:
                 dl.is_running = False
@@ -51,9 +54,13 @@ class DashboardController:
             except Exception:
                 pass
         self.active_downloaders.clear()
+        self.active_cancel_events.clear()
 
     def stop_download(self, line_name: str):
         """Cancel a specific download task by line name."""
+        ev = self.active_cancel_events.get(line_name)
+        if ev:
+            ev.set()
         dl = self.active_downloaders.get(line_name)
         if dl:
             dl.is_running = False
@@ -151,7 +158,9 @@ class DashboardController:
         )
 
         plc_name = plc_data.get("name", "PLC")
+        cancel_event = threading.Event()
         self.active_downloaders[plc_name] = downloader
+        self.active_cancel_events[plc_name] = cancel_event
         start_time = time.time()
         is_running = [True]
 
@@ -163,6 +172,7 @@ class DashboardController:
 
         def stop_this():
             is_running[0] = False
+            cancel_event.set()
             self.stop_download(plc_name)
 
         def update_timer_ui():
@@ -205,8 +215,9 @@ class DashboardController:
                         call_safe(lambda: on_queue(host_str))
 
             with host_lock:
-                if not is_running[0] or not downloader.is_running:
+                if not is_running[0] or cancel_event.is_set():
                     self.active_downloaders.pop(plc_name, None)
+                    self.active_cancel_events.pop(plc_name, None)
                     if on_finish_ui:
                         call_safe(lambda: on_finish_ui(was_cancelled=True, time_str="0.00s"))
                     if on_finish_callback:
@@ -225,11 +236,12 @@ class DashboardController:
                     downloader.download_files(progress_callback=progress_cb, log_callback=log_cb)
                 finally:
                     self.active_downloaders.pop(plc_name, None)
+                    self.active_cancel_events.pop(plc_name, None)
                     is_running[0] = False
                     elapsed = time.time() - start_time
                     mins, secs = divmod(int(elapsed), 60)
                     time_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.2f}s"
-                    was_cancelled = not downloader.is_running
+                    was_cancelled = cancel_event.is_set()
 
                     if on_finish_ui:
                         call_safe(lambda: on_finish_ui(was_cancelled=was_cancelled, time_str=time_str))

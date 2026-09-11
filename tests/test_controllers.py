@@ -444,6 +444,29 @@ class TestDashboardController(unittest.TestCase):
         # LINE 2 finished with was_cancelled=True
         self.assertEqual(cancelled_flags, [True])
 
+    @patch("ui.controllers.dashboard_controller.FTPDownloader")
+    def test_download_single_normal_execution(self, mock_downloader_cls):
+        from ui.controllers.dashboard_controller import DashboardController
+        controller = DashboardController(self.config_manager)
+
+        mock_instance = MagicMock()
+        # Default FTPDownloader has is_running = False before download_files
+        mock_instance.is_running = False
+        mock_downloader_cls.return_value = mock_instance
+
+        done = threading.Event()
+        ui_results = []
+
+        def on_finish_ui(was_cancelled, time_str):
+            ui_results.append(was_cancelled)
+
+        plc = {"name": "LINE 1", "host": "192.168.0.10", "port": 21, "username": "u", "password": "p"}
+        controller.download_single(plc, on_finish_ui=on_finish_ui, on_finish_callback=done.set)
+
+        self.assertTrue(done.wait(timeout=2.0))
+        mock_instance.download_files.assert_called_once()
+        self.assertEqual(ui_results, [False])
+
 
 
 if __name__ == "__main__":
