@@ -396,6 +396,24 @@ class DashboardView(ctk.CTkFrame):
         """Delegate single line download execution to DashboardController and wire UI feedbacks."""
         target_dir = self.target_dir_var.get().strip()
 
+        def on_queue(host_ip, stop_callback=None):
+            try:
+                if status_label and status_label.winfo_exists():
+                    status_label.configure(text="● In Queue", text_color="#FFA726")
+                if counter_label and counter_label.winfo_exists():
+                    counter_label.configure(text=f"รอตู้ PLC ({host_ip}) ว่าง...")
+                if action_button and action_button.winfo_exists():
+                    cmd = (lambda: [action_button.configure(text="Stopping...", state="disabled"), stop_callback()]) if stop_callback else None
+                    action_button.configure(
+                        text="🛑 Stop",
+                        fg_color=("#D32F2F", "#C62828"),
+                        hover_color=("#B71C1C", "#B71C1C"),
+                        state="normal",
+                        command=cmd
+                    )
+            except Exception:
+                pass
+
         def on_init(stop_callback):
             try:
                 if action_button and action_button.winfo_exists():
@@ -467,6 +485,7 @@ class DashboardView(ctk.CTkFrame):
             on_timer=on_timer,
             on_finish_ui=on_finish_ui,
             on_finish_callback=on_finish_callback,
+            on_queue=on_queue,
             safe_after=self.safe_after
         )
 

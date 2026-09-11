@@ -16,6 +16,16 @@ class DashboardController:
         self.active_downloaders: Dict[str, FTPDownloader] = {}
         self.plc_download_callbacks: List[Callable] = []
         self.plc_download_by_name: Dict[str, Callable] = {}
+        self._host_locks: Dict[str, threading.Lock] = {}
+        self._host_locks_mutex = threading.Lock()
+
+    def get_host_lock(self, host: str) -> threading.Lock:
+        """Get or create a dedicated threading.Lock for a specific PLC host IP."""
+        normalized = (host or "").strip().lower()
+        with self._host_locks_mutex:
+            if normalized not in self._host_locks:
+                self._host_locks[normalized] = threading.Lock()
+            return self._host_locks[normalized]
 
     def register_download_trigger(self, name: str, trigger: Callable):
         """Register a download trigger callback for a specific PLC line."""
@@ -99,6 +109,7 @@ class DashboardController:
         self,
         plc_data: Dict[str, Any],
         target_dir: Optional[str] = None,
+        on_queue: Optional[Callable] = None,
         on_init: Optional[Callable] = None,
         on_progress: Optional[Callable] = None,
         on_timer: Optional[Callable] = None,
@@ -107,7 +118,7 @@ class DashboardController:
         safe_after: Optional[Callable] = None
     ):
         """
-        Execute file download for a single PLC line in a background thread.
+        Execute file download for a single PLC line in a background thread with Per-Host lock queueing.
         """
         g_settings = self.config_manager.get().get("global_settings", {})
         target = (target_dir or g_settings.get("target_directory", "")).strip()
@@ -122,8 +133,11 @@ class DashboardController:
             remote_dirs = [d.strip() for d in r_dirs_raw.split(",") if d.strip()]
             machines = [{"name": f"MC{i+1}", "remote_dir": d} for i, d in enumerate(remote_dirs)]
 
+        host_str = plc_data.get("host", "").strip()
+        host_lock = self.get_host_lock(host_str)
+
         downloader = FTPDownloader(
-            host=plc_data.get("host", ""),
+            host=host_str,
             port=plc_data.get("port", 21),
             username=plc_data.get("username", "ftp"),
             password=plc_data.get("password", ""),
@@ -148,10 +162,8 @@ class DashboardController:
                 fn()
 
         def stop_this():
+            is_running[0] = False
             self.stop_download(plc_name)
-
-        if on_init:
-            call_safe(lambda: on_init(stop_callback=stop_this))
 
         def update_timer_ui():
             if is_running[0]:
@@ -161,10 +173,6 @@ class DashboardController:
                 if on_timer:
                     on_timer(t_str, "#3B8ED0")
                 call_safe(update_timer_ui, 500)
-
-        if on_timer:
-            on_timer("⏱ 00:00", "#3B8ED0")
-            call_safe(update_timer_ui, 500)
 
         def progress_cb(current, total, remaining=0, eta_str="", speed_str=""):
             prog = current / total if total > 0 else 0
@@ -183,21 +191,50 @@ class DashboardController:
             call_safe(lambda: self.logger.log(msg, level=level))
 
         def run():
-            self.logger.info(f"Starting download for {plc_name}...")
-            try:
-                downloader.download_files(progress_callback=progress_cb, log_callback=log_cb)
-            finally:
-                self.active_downloaders.pop(plc_name, None)
-                is_running[0] = False
-                elapsed = time.time() - start_time
-                mins, secs = divmod(int(elapsed), 60)
-                time_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.2f}s"
-                was_cancelled = not downloader.is_running
+            if host_lock.locked():
+                self.logger.info(f"[{plc_name}] Waiting in queue for PLC host '{host_str}'...")
+                if on_queue:
+                    try:
+                        import inspect
+                        sig = inspect.signature(on_queue)
+                        if len(sig.parameters) >= 2 or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+                            call_safe(lambda: on_queue(host_str, stop_callback=stop_this))
+                        else:
+                            call_safe(lambda: on_queue(host_str))
+                    except Exception:
+                        call_safe(lambda: on_queue(host_str))
 
-                if on_finish_ui:
-                    call_safe(lambda: on_finish_ui(was_cancelled=was_cancelled, time_str=time_str))
-                if on_finish_callback:
-                    call_safe(on_finish_callback)
+            with host_lock:
+                if not is_running[0] or not downloader.is_running:
+                    self.active_downloaders.pop(plc_name, None)
+                    if on_finish_ui:
+                        call_safe(lambda: on_finish_ui(was_cancelled=True, time_str="0.00s"))
+                    if on_finish_callback:
+                        call_safe(on_finish_callback)
+                    return
+
+                if on_init:
+                    call_safe(lambda: on_init(stop_callback=stop_this))
+
+                if on_timer:
+                    on_timer("⏱ 00:00", "#3B8ED0")
+                    call_safe(update_timer_ui, 500)
+
+                self.logger.info(f"Starting download for {plc_name}...")
+                try:
+                    downloader.download_files(progress_callback=progress_cb, log_callback=log_cb)
+                finally:
+                    self.active_downloaders.pop(plc_name, None)
+                    is_running[0] = False
+                    elapsed = time.time() - start_time
+                    mins, secs = divmod(int(elapsed), 60)
+                    time_str = f"{mins:02d}:{secs:02d}" if mins > 0 else f"{elapsed:.2f}s"
+                    was_cancelled = not downloader.is_running
+
+                    if on_finish_ui:
+                        call_safe(lambda: on_finish_ui(was_cancelled=was_cancelled, time_str=time_str))
+                    if on_finish_callback:
+                        call_safe(on_finish_callback)
 
         threading.Thread(target=run, daemon=True).start()
 

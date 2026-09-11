@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import json
+import threading
 import unittest
 from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -343,6 +344,106 @@ class TestDashboardController(unittest.TestCase):
 
         mock_test.assert_called_once()
         self.assertTrue(any("OK" in s[0] for s in status_updates))
+
+    def test_get_host_lock_singleton(self):
+        from ui.controllers.dashboard_controller import DashboardController
+        controller = DashboardController(self.config_manager)
+
+        lock1 = controller.get_host_lock("192.168.0.10")
+        lock2 = controller.get_host_lock("192.168.0.10")
+        lock3 = controller.get_host_lock("192.168.0.11")
+
+        self.assertIs(lock1, lock2)
+        self.assertIsNot(lock1, lock3)
+
+    @patch("ui.controllers.dashboard_controller.FTPDownloader")
+    def test_same_host_downloads_run_sequentially(self, mock_downloader_cls):
+        import time
+        from ui.controllers.dashboard_controller import DashboardController
+        controller = DashboardController(self.config_manager)
+
+        execution_order = []
+
+        def fake_download(*args, **kwargs):
+            execution_order.append("start")
+            time.sleep(0.08)
+            execution_order.append("end")
+
+        mock_instance = MagicMock()
+        mock_instance.is_running = True
+        mock_instance.download_files.side_effect = fake_download
+        mock_downloader_cls.return_value = mock_instance
+
+        plc1 = {"name": "LINE 1", "host": "192.168.0.10", "port": 21, "username": "u", "password": "p"}
+        plc2 = {"name": "LINE 2", "host": "192.168.0.10", "port": 21, "username": "u", "password": "p"}
+
+        done1 = threading.Event()
+        done2 = threading.Event()
+
+        queued_lines = []
+        def on_queue(host):
+            queued_lines.append(host)
+
+        controller.download_single(plc1, on_finish_callback=done1.set)
+        time.sleep(0.02)
+        controller.download_single(plc2, on_queue=on_queue, on_finish_callback=done2.set)
+
+        self.assertTrue(done1.wait(timeout=2.0))
+        self.assertTrue(done2.wait(timeout=2.0))
+
+        # Second download should have triggered on_queue
+        self.assertIn("192.168.0.10", queued_lines)
+        # Sequential order: start, end, start, end
+        self.assertEqual(execution_order, ["start", "end", "start", "end"])
+
+    @patch("ui.controllers.dashboard_controller.FTPDownloader")
+    def test_queue_cancellation_while_waiting(self, mock_downloader_cls):
+        import time
+        from ui.controllers.dashboard_controller import DashboardController
+        controller = DashboardController(self.config_manager)
+
+        downloaded = []
+
+        def fake_download(*args, **kwargs):
+            downloaded.append("dl1")
+            time.sleep(0.08)
+
+        mock_instance = MagicMock()
+        mock_instance.is_running = True
+        mock_instance.download_files.side_effect = fake_download
+        mock_downloader_cls.return_value = mock_instance
+
+        plc1 = {"name": "LINE 1", "host": "192.168.0.10", "port": 21, "username": "u", "password": "p"}
+        plc2 = {"name": "LINE 2", "host": "192.168.0.10", "port": 21, "username": "u", "password": "p"}
+
+        done1 = threading.Event()
+        done2 = threading.Event()
+        cancelled_flags = []
+
+        def on_queue(host, stop_callback=None):
+            if stop_callback:
+                stop_callback()
+
+        def on_finish_ui2(was_cancelled, time_str):
+            cancelled_flags.append(was_cancelled)
+
+        controller.download_single(plc1, on_finish_callback=done1.set)
+        time.sleep(0.02)
+        controller.download_single(
+            plc2,
+            on_queue=on_queue,
+            on_finish_ui=on_finish_ui2,
+            on_finish_callback=done2.set
+        )
+
+        self.assertTrue(done1.wait(timeout=2.0))
+        self.assertTrue(done2.wait(timeout=2.0))
+
+        # Only LINE 1 actually downloaded
+        self.assertEqual(downloaded, ["dl1"])
+        # LINE 2 finished with was_cancelled=True
+        self.assertEqual(cancelled_flags, [True])
+
 
 
 if __name__ == "__main__":
