@@ -169,6 +169,58 @@ class TestPLCManagerController(unittest.TestCase):
         ok, msg, _ = controller.validate_plc(data)
         self.assertFalse(ok)
 
+    def test_validate_plc_duplicate_ip(self):
+        from ui.controllers.plc_manager_controller import PLCManagerController
+        controller = PLCManagerController(self.config_manager)
+
+        # LINE 1 has host "192.168.0.10" and port 21
+        dup_ip_data = {
+            "name": "NEW LINE",
+            "host": "192.168.0.10",
+            "port": 21,
+            "username": "admin",
+            "password": "pwd",
+            "machines": [{"name": "MC1", "remote_dir": "/"}]
+        }
+        ok, msg, _ = controller.validate_plc(dup_ip_data)
+        self.assertFalse(ok)
+        self.assertIn("192.168.0.10", msg)
+        self.assertIn("LINE 1", msg)
+
+    def test_validate_plc_duplicate_name(self):
+        from ui.controllers.plc_manager_controller import PLCManagerController
+        controller = PLCManagerController(self.config_manager)
+
+        # LINE 1 already exists
+        dup_name_data = {
+            "name": "LINE 1",
+            "host": "192.168.0.99",
+            "port": 21,
+            "username": "admin",
+            "password": "pwd",
+            "machines": [{"name": "MC1", "remote_dir": "/"}]
+        }
+        ok, msg, _ = controller.validate_plc(dup_name_data)
+        self.assertFalse(ok)
+        self.assertIn("LINE 1", msg)
+
+    def test_validate_plc_edit_self_allowed(self):
+        from ui.controllers.plc_manager_controller import PLCManagerController
+        controller = PLCManagerController(self.config_manager)
+
+        # Editing LINE 1 (index 0) with its own IP and name is valid
+        edit_self = {
+            "name": "LINE 1",
+            "host": "192.168.0.10",
+            "port": 21,
+            "username": "admin",
+            "password": "pwd",
+            "machines": [{"name": "MC1", "remote_dir": "/"}]
+        }
+        ok, msg, sanitized = controller.validate_plc(edit_self, edit_index=0)
+        self.assertTrue(ok)
+        self.assertIsNotNone(sanitized)
+
     def test_crud_plc(self):
         from ui.controllers.plc_manager_controller import PLCManagerController
         controller = PLCManagerController(self.config_manager)

@@ -15,9 +15,9 @@ class PLCManagerController:
         """Return the current list of PLC configurations."""
         return self.config_manager.get().get("plcs", [])
 
-    def validate_plc(self, data: Dict[str, Any]) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    def validate_plc(self, data: Dict[str, Any], edit_index: Optional[int] = None) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
-        Validate and sanitize PLC configuration data.
+        Validate and sanitize PLC configuration data, ensuring no duplicate IP or Name.
         Returns (is_valid: bool, message: str, sanitized_data: Optional[Dict]).
         """
         line_name = str(data.get("name", "")).strip()
@@ -35,6 +35,23 @@ class PLCManagerController:
                 port = 21
         except (ValueError, TypeError):
             port = 21
+
+        # Check for duplicate name or IP:port against other PLCs
+        existing_plcs = self.get_plcs()
+        for idx, existing in enumerate(existing_plcs):
+            if edit_index is not None and idx == edit_index:
+                continue
+            ex_name = str(existing.get("name", "")).strip()
+            if ex_name.lower() == line_name.lower():
+                return False, f"Line Name '{line_name}' is already used by another Line.", None
+
+            ex_host = str(existing.get("host", "")).strip()
+            try:
+                ex_port = int(existing.get("port", 21))
+            except (ValueError, TypeError):
+                ex_port = 21
+            if ex_host.lower() == host.lower() and ex_port == port:
+                return False, f"IP Address '{host}:{port}' is already used by '{ex_name}'. Duplicate IP is not allowed to prevent connection collisions.", None
 
         username = str(data.get("username", "ftp")).strip()
         password = str(data.get("password", "")).strip()
@@ -88,7 +105,7 @@ class PLCManagerController:
 
     def add_plc(self, plc_data: Dict[str, Any]) -> Tuple[bool, str]:
         """Validate and add a new PLC."""
-        ok, msg, sanitized = self.validate_plc(plc_data)
+        ok, msg, sanitized = self.validate_plc(plc_data, edit_index=None)
         if not ok:
             return False, msg
 
@@ -98,7 +115,7 @@ class PLCManagerController:
 
     def update_plc(self, index: int, plc_data: Dict[str, Any]) -> Tuple[bool, str]:
         """Validate and update an existing PLC."""
-        ok, msg, sanitized = self.validate_plc(plc_data)
+        ok, msg, sanitized = self.validate_plc(plc_data, edit_index=index)
         if not ok:
             return False, msg
 
